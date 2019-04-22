@@ -1,5 +1,6 @@
 SPRITE_LOC EQU $C100
 
+; File full of helper functions - need to cleanup register usage here
 SECTION "Helpers", ROM0
 
 ; Wait for v-blank
@@ -51,6 +52,7 @@ LoadBGLoc:
     ld a, [rSCY]
     ld c, a
     ret
+
 ; Decrements SCX, and returns value in A
 ScrollBGRight:
     ld a, [rSCX]
@@ -135,6 +137,7 @@ WorldToTileMap:
     ld a, l
     sub $10
     ld l, a
+
 rept 3 ; divide by 2^3 (8)
     srl h
     srl l
@@ -146,24 +149,25 @@ endr
 ; Tile address in hl
 ; Tile ID in A
 GetTileAtPosition:
-    push bc
-    ld a, c
-    ld h, $00
-    cp $00
-    jr z, .skipY
+    push bc ; Store BC
+    ld a, c ; Load Y position into A
+    ld h, $00 ; Load 0 into H
+    cp $00 ; Check if Y pos is 0
+    jr z, .skipY ; If it is, we can skip
 
-    ld l, c 
+    ld l, c ; Load Y position into L
 rept 5
-    add hl
+    add hl ; Multiply y pos by 5 for some reason?
 endr
 .skipY
-    ld c, b
-    ld b, $00
-    add hl, bc
-    add hl, de
-    ld a, [hl]
-    pop bc
-    ret
+    ld c, b ; Load X position into C
+    ld b, $00 ; Load 0 into B
+    add hl, bc ; Add the X pos to the total
+    add hl, de ; Add the total to the memory address
+    ld a, [hl] ; Load the Tile Id
+    pop bc ; Restore BC
+    ret ; Return
+
 
 ; Get World Position of Top Left of Tile (doesn't support slopes/half tiles)
 ; Includes adjustments for sprite position offset (sprite top left is not 0,0!)
@@ -203,7 +207,6 @@ negateNumber:
     CPL
     add $01
     ret
-
 
 
 ; Convert an 8-bit world coordinate to screen coordinates
@@ -260,3 +263,43 @@ stringCopy:
     ret z
     ld [hli], a
     jr stringCopy
+
+; Check if one sprite position intersects with another
+; @param bc - X1Y1 position of the first sprite
+; @param hl - X2Y2 position of the second sprite
+; @return a - zero if no overlap, one if overlap
+checkOverlap:
+    ld a, b ; Load X1
+    add a, $08 ; Add the width
+    cp h ; Compare against X2
+    jr c, .retNoColl
+
+    ld a, h ; Load X2
+    add a, $08 ; Add the width
+    ld h, a
+    ld a, b
+    cp h ; Compare against X1
+    jr nc, .lte 
+
+    ld a, c ; Load X1
+    add a, $08 ; Add the width
+    cp l ; Compare against X2
+    jr c, .retNoColl
+
+    ld a, l ; Load X2
+    add a, $08 ; Add the width
+    ld l, a
+    ld a, c
+    cp l ; Compare against X1
+    jr nc, .lte 
+
+.retColl
+    ld a, $01
+    ret
+.lte
+    jr nz, .retNoColl
+    jp .retNoColl
+.retNoColl
+    xor a
+    ret
+

@@ -1,4 +1,4 @@
 .\rgbasm.exe -o main.o main.asm
-.\rgblink.exe -o hello-world.gb main.o
-.\rgbfix.exe -v -p 0 hello-world.gb
-.\bgb64.exe hello-world.gb
+if($?) { .\rgblink.exe -o gameboygame.gb main.o }
+if($?) { .\rgbfix.exe -v -p 0 gameboygame.gb }
+if($?) { .\bgb64.exe gameboygame.gb }

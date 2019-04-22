@@ -69,6 +69,8 @@ OAMF_PAL1       EQU %00010000 ; Palette number; 0,1 (DMG)
 OAMF_BANK0      EQU %00000000 ; Bank number; 0,1 (GBC)
 OAMF_BANK1      EQU %00001000 ; Bank number; 0,1 (GBC)
 
+OMF_XFLIP_INV   EQU %11011111
+
 OAMF_PALMASK    EQU %00000111 ; Palette (GBC)
 
 OAMB_PRI        EQU 7 ; Priority 
@@ -381,7 +383,6 @@ rSVBK EQU $FF70
 ; -- Interrupt Enable (R/W)
 ; --
 rIE EQU $FFFF
-
 
 IEF_HILO   EQU %00010000 ; Transition from High to Low of Pin number P10-P13
 IEF_SERIAL EQU %00001000 ; Serial I/O transfer end

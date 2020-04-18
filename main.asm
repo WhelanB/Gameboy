@@ -5,7 +5,7 @@ INCLUDE "helpers.asm"
 SECTION "Header", ROM0[$100]
 
 EntryPoint: ; This is where execution begins
-    nop ; Disable interrupts.
+    di ; Disable interrupts.
     jp Start ; Leave this tiny space
 REPT $150 - $104
     db 0
@@ -15,7 +15,13 @@ SECTION "Game", ROM0
 
 INCLUDE "Sprites/inigo.inc"
 Start:
-    call WaitVBlank
+    ld	a, IEF_VBLANK ; Enable v-blank interrupt only
+    ld	[rIE], a 
+    
+    ei
+
+    halt
+    nop
 
     call TurnOffLCD
     ld hl, $9000 ; go to zero in first VRAM tileset
@@ -37,7 +43,9 @@ Start:
     ld [rLCDC], a ; Enable LCD and Background
 
 .stop:
-    call WaitVBlank ; Wait for the next frame
+
+    call WaitVBlank
+    
     call SampleInput ; Sample d-pad and buttons
     ld c, a ; Store state of input in c - should probably move this to ram
     cp 0 ; If no keys pressed, try again!
@@ -75,3 +83,6 @@ FontTilesEnd:
 
 SECTION "OAM Vars", WRAM0[$C100]
 scroll: DS 1
+
+SECTION "Vblank", ROM0[$0040]
+	reti

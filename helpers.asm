@@ -1,3 +1,5 @@
+SPRITE_LOC EQU $C100
+
 SECTION "Helpers", ROM0
 
 ; Wait for v-blank
@@ -43,6 +45,12 @@ SampleInput: ; Taken from Nintendo GB Programming manual, updated to use hardwar
     or b
     ret
 
+LoadBGLoc:
+    ld a, [rSCX]
+    ld b, a
+    ld a, [rSCY]
+    ld c, a
+    ret
 ; Decrements SCX, and returns value in A
 ScrollBGRight:
     ld a, [rSCX]
@@ -71,9 +79,73 @@ ScrollBGUp:
     ld [rSCY], a
     ret
 
+; Decrements SCX, and returns value in A
+; Limited to the 32x32 tiles of the background layer
+ScrollBGRightLim:
+    ld a, [rSCX]
+    cp $00
+    jr z, .return
+    dec a
+    ld [rSCX], a
+.return
+    ret
 
+; Increments SCX, and returns value in A
+; Limited to the 32x32 tiles of the background layer
+ScrollBGLeftLim:
+    ld a, [rSCX]
+    cp $60
+    jr z, .return
+    inc a
+    ld [rSCX], a
+.return
+    ret
 
+; Decrements SCY, and returns value in A
+; Limited to the 32x32 tiles of the background layer
+ScrollBGDownLim:
+    ld a, [rSCY]
+    cp $00
+    jr z, .return
+    dec a
+    ld [rSCY], a
+.return
+    ret
 
+; Increments SCY, and returns value in A
+; Limited to the 32x32 tiles of the background layer
+ScrollBGUpLim:    
+    ld a, [rSCY]
+    cp $70
+    jr z, .return
+    inc a
+    ld [rSCY], a
+.return
+    ret
+
+; Get tile which location H,L is occupying
+; input and output in HL (X,Y)
+WorldToTileMap:
+rept 3
+    srl h
+    srl l
+endr
+    ret
+
+; Convert an 8-bit world coordinate to screen coordinates
+; Games like Super Mario Land keep Mario centered + scroll background to move
+; But 
+; input and output in HL (X,Y)
+; Screen coordinates in BC (X,Y)
+; needs to be updated to return some out of bounds coordinate if wrap-around occurs
+WorldToScreenCoord:
+    ld a, h ; Load X pos into a
+    sub a, b ; Subtract scroll from x pos
+    ld h, a ; Store in h
+    ld a, l ; Repeat for y pos
+    sub a, c
+    ld l, a
+    ret
 
 ;memCopy
 ; Copies a range of values from one location to another
@@ -83,12 +155,21 @@ ScrollBGUp:
 ; hl - A pointer to the beginning of the destination buffer
 memCopy:
     ld a, [de] ; Grab a byte
-    ld [hli], a ; Place it into VRAM
+    ld [hli], a ; Place it into loc
     inc de ; get next byte
     dec bc ; decrement size counter
     ld a, b ; check if size counter is 0
     or c
     jr nz, memCopy ; keep going if not zero
+    ret
+
+memClear:
+    xor a
+    ld [hli], a
+    dec bc
+    ld a, b
+    or c
+    jr nz, memClear
     ret
 
 ; Copy a null terminated string (excluding null) to memory

@@ -132,6 +132,11 @@ rept 3
 endr
     ret
 
+negateNumber:
+    CPL
+    add $01
+    ret
+
 ; Convert an 8-bit world coordinate to screen coordinates
 ; Games like Super Mario Land keep Mario centered + scroll background to move
 ; But 

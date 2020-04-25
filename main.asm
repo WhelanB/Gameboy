@@ -1,6 +1,7 @@
 INCLUDE "hardware.inc"
 
 INCLUDE "helpers.asm"
+INCLUDE "player.asm"
 
 SECTION "Header", ROM0[$100]
 
@@ -59,96 +60,17 @@ Start:
     ld a, $00
     ld [$C103], a
 
-    ld a, $88
-    ld [$C104], a
-    ld a, $2A
-    ld [$C105], a
-    ld a, $1B
-    ld [$C106], a
-    ld a, $00
-    ld [$C107], a
-
-    ld a, $88
-    ld [$C108], a
-    ld a, $32
-    ld [$C109], a
-    ld a, $12
-    ld [$C10A], a
-    ld a, $00
-    ld [$C10B], a
-
-    ld a, $88
-    ld [$C10C], a
-    ld a, $3A
-    ld [$C10D], a
-    ld a, $0A
-    ld [$C10E], a
-    ld a, $00
-    ld [$C10F], a
-
-    ld a, $88
-    ld [$C110], a
-    ld a, $42
-    ld [$C111], a
-    ld a, $17
-    ld [$C112], a
-    ld a, $00
-    ld [$C113], a
-
     ld [rNR52], a ; Disable sound
     ld a, %10000011 ;
     ld [rLCDC], a ; Enable LCD, Sprites and Background
+    call init_player
 
 .stop:
-    call LoadBGLoc
-    ld l, $88
-    ld h, $22
-    call WorldToScreenCoord
-    ld [$C100], a
-    ld a, h
-    ld [$C101], a
-    ld a, $0B
-    ld [$C102], a
-    ld a, $00
-    ld [$C103], a
     halt
     nop
 
+    call update_player
 
-    ;call ScrollBGLeft
-    call SampleInput ; Sample d-pad and buttons
-    ld d, a ; Store state of input in c - should probably move this to ram
-    cp 0 ; If no keys pressed, try again!
-    jr z, .updatePos ; jump to wait for next frame
-
-    bit PADB_LEFT, a ; check if d-pad left is pressed
-    jr z, .testRight ; if it isn't, check if d-pad right is pressed
-    call ScrollBGRightLim ; otherwise, scroll BG to the left
-    ld b, a
-    jr .testUp
-
-.testRight:
-    ld a, d ; Scrolling BG uses a register, so restore it from c
-    bit PADB_RIGHT, a
-    jr z, .testUp
-    call ScrollBGLeft
-    ld b, a
-
-.testUp:
-    ld a, d
-    bit PADB_UP, a
-    jr z, .testDown
-    call ScrollBGDownLim
-    ld c, a
-    jr .updatePos
-
-.testDown:
-    ld a, d
-    bit PADB_DOWN, a
-    jr z, .updatePos
-    call ScrollBGUpLim
-    ld c, a
-    
 
 .updatePos
 
@@ -160,8 +82,6 @@ FontTiles:
 INCBIN "Sprites/font.chr"
 FontTilesEnd:
 
-
-SECTION "Echo OAM", WRAM0[$C100]
 
 SECTION "Vblank", ROM0[$0040]
     ld a, $C1

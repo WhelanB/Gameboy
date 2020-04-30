@@ -71,9 +71,6 @@ Start:
 
     call update_player
 
-
-.updatePos
-
 jr .stop
 
 SECTION "Font", ROM0

@@ -92,6 +92,14 @@ update_player:
     add a, b
     ld [PLAYER_Y], a
 
+
+    cp $88 ; check floor pos
+    jr c, .applyXVelocity ; first, check if we're grounded    
+    xor a
+    ld [PLAYER_DY], a ; reset velocity
+    ld a, $88 
+    ld [PLAYER_Y], a ; push back to top of floor
+
 .applyXVelocity:
     ld a, [PLAYER_DX]
     ld b, a

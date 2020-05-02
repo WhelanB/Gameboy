@@ -123,13 +123,44 @@ ScrollBGUpLim:
 .return
     ret
 
-; Get tile which location H,L is occupying
+; Get tilemap position which location H,L is occupying
 ; input and output in HL (X,Y)
 WorldToTileMap:
-rept 3
+    ; Correct X-Pos for sprite offset
+    ld a, h
+    sub $08
+    ld h, a
+
+    ; Correct Y-Pos for sprite offset
+    ld a, l
+    sub $10
+    ld l, a
+rept 3 ; divide by 2^3 (8)
     srl h
     srl l
 endr
+    ret
+
+; Get tile at position B,C (X,Y)
+; Tilemap offset in DE ($9800)
+; Tile address in hl
+; Tile ID in A
+GetTileAtPosition:
+    ld a, c
+    ld h, $00
+    cp $00
+    jr z, .skipY
+
+    ld l, c 
+rept 5
+    add hl
+endr
+.skipY
+    ld c, b
+    ld b, $00
+    add hl, bc
+    add hl, de
+    ld a, [hl]
     ret
 
 negateNumber:

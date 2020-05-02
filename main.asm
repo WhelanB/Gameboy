@@ -16,11 +16,12 @@ SECTION "Game", ROM0
 
 INCLUDE "Sprites/map.inc"
 Start:
-    ld	a, IEF_VBLANK ; Enable v-blank interrupt only
+    ld	a, IEF_VBLANK | IEF_LCDC; Enable v-blank interrupt only
     ld	[rIE], a 
     call CopyDMARoutine
     ei
 
+    ;call WaitVBlank
     halt ; Halt stops CPU until interrupt (v-blank) occurs
     nop ; nop, because of Halt bug
 
@@ -68,7 +69,7 @@ Start:
 .stop:
     halt
     nop
-
+    ;call WaitVBlank
     call update_player
 
 jr .stop
@@ -84,6 +85,11 @@ SECTION "Vblank", ROM0[$0040]
     ld a, $C1
     call $FF80
 	reti
+
+SECTION "lcdc",ROM0[$0048]
+    call ScrollBGRight
+    reti
+
 
 SECTION "OAM DMA routine", ROM0
 CopyDMARoutine:

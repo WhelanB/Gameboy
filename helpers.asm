@@ -141,11 +141,12 @@ rept 3 ; divide by 2^3 (8)
 endr
     ret
 
-; Get tile at position B,C (X,Y)
+; Get tile at tile position B,C (X,Y)
 ; Tilemap offset in DE ($9800)
 ; Tile address in hl
 ; Tile ID in A
 GetTileAtPosition:
+    push bc
     ld a, c
     ld h, $00
     cp $00
@@ -161,12 +162,32 @@ endr
     add hl, bc
     add hl, de
     ld a, [hl]
+    pop bc
+    ret
+
+; Get World Position of Top Left of Tile (doesn't support slopes/half tiles)
+; Includes adjustments for sprite position offset (sprite top left is not 0,0!)
+; Input and Output in B,C (X,Y)
+GetTileTopLeftWorldPosition:
+rept 3 ; mull by 2^3 (8)
+    sla b
+    sla c
+endr
+    ld a, b
+    add $08
+    ld b, a
+
+    ld a, c
+    add $10
+    ld c, a
     ret
 
 negateNumber:
     CPL
     add $01
     ret
+
+
 
 ; Convert an 8-bit world coordinate to screen coordinates
 ; Games like Super Mario Land keep Mario centered + scroll background to move

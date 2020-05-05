@@ -1,5 +1,7 @@
 SECTION "Player", ROM0
+; These three values MUST be multiples
 PLAYER_GRAVITY equ %00000110 ; 0.1875 (000.00110)
+GRAVITY_LIM equ $84 ; (100.00100)
 PLAYER_JUMP_VEL equ %01100000 ; 3.0 (011.00000)
 FLOOR_POS equ $88
 init_player:
@@ -32,6 +34,9 @@ update_player:
     ld a, $02
     call negateNumber
     ld [PLAYER_DX], a
+    ld a, [PLAYER_ATTRIBUTE]
+    or OAMF_XFLIP
+    ld [PLAYER_ATTRIBUTE], a
     jr .testJump
 
 .testRight:
@@ -40,21 +45,17 @@ update_player:
     jr z, .testJump
     ld a, $02
     ld [PLAYER_DX], a
+    ld a, [PLAYER_ATTRIBUTE]
+    and OMF_XFLIP_INV
+    ld [PLAYER_ATTRIBUTE], a
 
 .testJump:
-    
-    ;ld a, [PLAYER_Y]
-    ;cp FLOOR_POS ; check floor pos
-    ;jr c, .notGrounded ; first, check if we're grounded
-
     ld a, [PLAYER_IS_GROUNDED]
     cp $00
     jr z, .notGrounded ; If the grounded flag is not set, jump to handle gravity etc.
 
-
     ; If the grounded flag is set:
 .grounded
-
     ld a, c ; Restore key state
     bit PADB_A, a ; Check for button A down
     jr z, .notJumpPressed ; If A not pressed, skip
@@ -73,10 +74,10 @@ update_player:
 
     ; If A not pressed, and we're grounded
 .notJumpPressed
-    xor a ; set A reg to 0
-    ld [PLAYER_DY], a ; reset delta Y to 0
-    ld a, [FLOOR_Y] ; Load floor position
-    ld [PLAYER_Y], a ; push back to top of floor
+    ;xor a ; set A reg to 0
+    ;ld [PLAYER_DY], a ; reset delta Y to 0
+    ;ld a, [FLOOR_Y] ; Load floor position
+    ;ld [PLAYER_Y], a ; push back to top of floor
     jr .jumpEnd
 
     ; If we're not grounded:
@@ -93,8 +94,7 @@ update_player:
     
 .jumpEnd
 
-.applyVelocity:
-
+.applyYVelocity:
     ld a, [PLAYER_DY] ; Load Player delta Y into a
     ld b, a ; move to B reg
     sra b
@@ -109,8 +109,11 @@ update_player:
 
     ;cp FLOOR_POS ; check floor pos
     ;jr c, .applyXVelocity ; first, check if we're grounded   
+    ld a, [PLAYER_DY]
+    bit OAMB_PRI, a
+    jr nz, .resolveYPenetrationUp ; Only check for collisions if we're falling
 
-.resolveYPenetration
+.resolveYPenetrationDown ; Need to fix clipping at edge of tile on right side
     ld a, [PLAYER_X] ; Load Player X pos into H
     add a, $04 ; middle of player
     ld h, a
@@ -126,9 +129,6 @@ update_player:
     ld c, l ; Load tilemap position Y into C - BC now contains tile player is contained in
     ld d, $98 ; Set DE to $9800 - tilemap address
     ld e, $00 ; Set DE to $9800 - tilemap address
-    ld a, c 
-    ;add a, $01 ; Add 1 to Tilemap Y pos to get tile underneath player (TODO)
-    ld c, a
     call GetTileAtPosition ; Get ID of Tile underneath player
     ld [PLAYER_TILE_ID], a
     cp $60 ; Compare to floor tile
@@ -140,13 +140,39 @@ update_player:
     xor a
     ld [PLAYER_DY], a ; reset velocity
     call GetTileTopLeftWorldPosition ; right now, we don't care about collisions in any direction but down!
-    ld a, b
-    ld [FLOOR_X], a
     ld a, c
-    ld [FLOOR_Y], a
     sub a, $08
     ld [PLAYER_Y], a ; Reset player position
     jr .applyXVelocity
+
+.resolveYPenetrationUp ; TODO there is a lot of duplicate code between here and resolveYPenetrationDown
+    ld a, [PLAYER_X] ; Load Player X pos into H
+    add a, $04 ; middle of player
+    ld h, a
+    ld a, [PLAYER_Y] ; Load Player Y pos into L - HL now contains position
+    ld l, a
+    call WorldToTileMap ; Convert Player position to Tilemap position
+    ld a, h
+    ld [PLAYER_TILE_X], a ; Store Tilemap position into memory
+    ld a, l
+    ld [PLAYER_TILE_Y], a ; Store Tilemap position into memory
+    ld b, h ; Load tilemap position X into B
+    ld c, l ; Load tilemap position Y into C - BC now contains tile player is contained in
+    ld d, $98 ; Set DE to $9800 - tilemap address
+    ld e, $00 ; Set DE to $9800 - tilemap address
+
+    call GetTileAtPosition ; Get ID of Tile over player
+    ld [PLAYER_TILE_ID], a
+    cp $60 ; Compare to floor tile
+    jr nz, .resetGrounded ; If not floor tile, set grounded flag to 0 again
+
+    xor a
+    ld [PLAYER_DY], a ; reset velocity
+    call GetTileBottomRightWorldPosition ; right now, we don't care about collisions in any direction but down!
+    ld a, c   
+    ld [PLAYER_Y], a ; Reset player position
+    jr .applyXVelocity
+
 
 .resetGrounded
     xor a
@@ -159,33 +185,67 @@ update_player:
     add a, b
     ld [PLAYER_X], a
 
-    ld a, [PLAYER_X]
+    ld a, [PLAYER_DX]
+    bit OAMB_PRI, a
+    jr nz, .resolveXPenetrationLeft ; Are we going left or right?
+
+.resolveXPenetrationRight
+    ld a, [PLAYER_X] ; Load Player X pos into H
+    add a, $08
     ld h, a
-    ld a, [PLAYER_Y]
+    ld a, [PLAYER_Y] ; Load Player Y pos into L - HL now contains position
+    add a, $04 ; middle of player
     ld l, a
-    call WorldToTileMap ; translate player position to tile position
+    call WorldToTileMap ; Convert Player position to Tilemap position
     ld a, h
-    ld [PLAYER_TILE_X], a
+    ld [PLAYER_TILE_X], a ; Store Tilemap position into memory
     ld a, l
-    ld [PLAYER_TILE_Y], a
-    ld b, h
-    ld c, l
-    ld d, $98
-    ld e, $00 ; BG tilemap starts at $9800, so set this as offset
-    ld a, c
-    ;add a, $01 ; increment tile Y by 1 to get tile under player
-    ld c, a
-    call GetTileAtPosition ; Get TileID
+    ld [PLAYER_TILE_Y], a ; Store Tilemap position into memory
+    ld b, h ; Load tilemap position X into B
+    ld c, l ; Load tilemap position Y into C - BC now contains tile player is contained in
+    ld d, $98 ; Set DE to $9800 - tilemap address
+    ld e, $00 ; Set DE to $9800 - tilemap address
+    call GetTileAtPosition ; Get ID of Tile underneath player
     ld [PLAYER_TILE_ID], a
-    call GetTileTopLeftWorldPosition ; Get Top-left pixel of tile under player
+    cp $60 ; Compare to floor tile
+    jr nz, .stop ; If not floor tile, set grounded flag to 0 again
+
+
+    xor a
+    ld [PLAYER_DX], a ; reset velocity
+    call GetTileTopLeftWorldPosition ; Get the left pos of the tile
     ld a, b
-    ld [PLAYER_TILE_TOP_X], a
-    ld [FLOOR_X], a
-    ld a, c
-    ld [PLAYER_TILE_TOP_Y], a
-    ld [FLOOR_Y], a
-    ld a, $0F
-    ld [FLOOR_SPRITE], a
+    sub a, $08  
+    ld [PLAYER_X], a ; Reset player position
+    jr .stop
+
+.resolveXPenetrationLeft ; TODO there is a lot of duplicate code between here and resolveXPenetrationRight
+    ld a, [PLAYER_X] ; Load Player X pos into H
+    ld h, a
+    ld a, [PLAYER_Y] ; Load Player Y pos into L - HL now contains position
+    add a, $04 ; middle of player
+    ld l, a
+    call WorldToTileMap ; Convert Player position to Tilemap position
+    ld a, h
+    ld [PLAYER_TILE_X], a ; Store Tilemap position into memory
+    ld a, l
+    ld [PLAYER_TILE_Y], a ; Store Tilemap position into memory
+    ld b, h ; Load tilemap position X into B
+    ld c, l ; Load tilemap position Y into C - BC now contains tile player is contained in
+    ld d, $98 ; Set DE to $9800 - tilemap address
+    ld e, $00 ; Set DE to $9800 - tilemap address
+    call GetTileAtPosition ; Get ID of Tile underneath player
+    ld [PLAYER_TILE_ID], a
+    cp $60 ; Compare to floor tile
+    jr nz, .stop ; If not floor tile, set grounded flag to 0 again
+
+
+    xor a
+    ld [PLAYER_DX], a ; reset velocity
+    call GetTileBottomRightWorldPosition ; Get the left pos of the tile
+    ld a, b  
+    ld [PLAYER_X], a ; Reset player position
+    jr .stop
 
 
 .stop
@@ -196,7 +256,7 @@ PLAYER_Y: DS 1
 PLAYER_X: DS 1
 PLAYER_SPRITE: DS 1
 PLAYER_ATTRIBUTE : DS 1
-FLOOR_Y: DS 1
+FLOOR_Y: DS 1 ; Debug sprite used to check tile positions
 FLOOR_X: DS 1
 FLOOR_SPRITE: DS 1
 

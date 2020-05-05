@@ -182,6 +182,23 @@ endr
     ld c, a
     ret
 
+; Get World Position of Top Left of Tile (doesn't support slopes/half tiles)
+; Includes adjustments for sprite position offset (sprite top left is not 0,0!)
+; Input and Output in B,C (X,Y)
+GetTileBottomRightWorldPosition:
+rept 3 ; mull by 2^3 (8)
+    sla b
+    sla c
+endr
+    ld a, b
+    add $10
+    ld b, a
+
+    ld a, c
+    add $18
+    ld c, a
+    ret
+
 negateNumber:
     CPL
     add $01

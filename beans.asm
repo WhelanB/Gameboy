@@ -84,6 +84,7 @@ update_beans:
     ld [hl], a ; load zero into hl
     ld a, [GAME_SCORE] ; load the current score into a
     inc a ; increment a
+    daa
     ld [GAME_SCORE], a ; set the current game score to a
 .skipcoltest
     ld a, [hl] ; Load the Y-Pos into a
@@ -93,8 +94,6 @@ update_beans:
     jr nz, .dontDestroy
     xor a
     ld [hl], a
-    ld a, $C0
-    ld [rNR44], a ; Play noise
     push hl
     inc hl
     ld a, [hl] ; Load the X-Pos
@@ -106,8 +105,14 @@ update_beans:
     xor a
     ld b, a
     add hl, bc
+    ld a, [hl]
+    cp $2C
+    jr z, .dontReplace
     ld a, $2C
     ld [hl], a
+    ld a, $C0
+    ld [rNR44], a ; Play noise
+.dontReplace
     pop hl
 .dontDestroy
     inc hl ; Skip over Y-Pos

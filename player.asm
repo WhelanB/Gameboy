@@ -4,7 +4,7 @@ PLAYER_GRAVITY equ %00000110 ; 0.1875 (000.00110)
 GRAVITY_LIM equ $84 ; (100.00100)
 PLAYER_JUMP_VEL equ %01100000 ; 3.0 (011.00000)
 FLOOR_POS equ $88
-WALK_SPEED equ $02
+WALK_SPEED equ $01
 init_player:
     xor a
     ld [PLAYER_DY], a
@@ -119,40 +119,28 @@ update_player:
 
 .resolveYPenetrationDown ; Need to fix clipping at edge of tile on right side
     ld a, [PLAYER_X] ; Load Player X pos into H
-    add a, $04 ; middle of player (need to make this based on direction!)
+    add a, $02
     ld h, a
     ld a, [PLAYER_Y] ; Load Player Y pos into L - HL now contains position
     add a, $08 ; bottom of player
     ld l, a
-    call WorldToTileMap ; Convert Player position to Tilemap position
-
+    call resolveYPenetrationDownShared
+    ld [PLAYER_IS_GROUNDED], a ; store result in b
     ld a, h
-    ld [PLAYER_TILE_X], a ; Store Tilemap position into memory
-    ld a, l
-    ld [PLAYER_TILE_Y], a ; Store Tilemap position into memory
-    ld b, h ; Load tilemap position X into B
-    ld c, l ; Load tilemap position Y into C - BC now contains tile player is contained in
-    ld d, $98 ; Set DE to $9800 - tilemap address
-    ld e, $00 ; Set DE to $9800 - tilemap address
-    call GetTileAtPosition ; Get ID of Tile underneath player
-    ld [PLAYER_TILE_ID], a
-
-    ;cp $60 ; Compare to floor tile
-    call canCollide
+    add a, $04
+    ld h, a
+    call resolveYPenetrationDownShared
+    ld b, a
+    ld a, [PLAYER_IS_GROUNDED]
+    add a, b
     cp $00
-    jr z, .resetGrounded ; If not floor tile, set grounded flag to 0 again
-
-    ld a, $01 
-    ld [PLAYER_IS_GROUNDED], a ; Otherwise, we're grounded! go to your room
+    jr z, .resetGrounded
+    ld a, $01
+    ld [PLAYER_IS_GROUNDED], a
     ld a, $6A
     ld [PLAYER_SPRITE], a
-    xor a
-    ld [PLAYER_DY], a ; reset velocity
-    call GetTileTopLeftWorldPosition ; right now, we don't care about collisions in any direction but down!
-    ld a, c
-    sub a, $08
-    ld [PLAYER_Y], a ; Reset player position
     jr .applyXVelocity
+
 
 .resolveYPenetrationUp ; TODO there is a lot of duplicate code between here and resolveYPenetrationDown
     ld a, [PLAYER_X] ; Load Player X pos into H
@@ -170,7 +158,6 @@ update_player:
     ld c, l ; Load tilemap position Y into C - BC now contains tile player is contained in
     ld d, $98 ; Set DE to $9800 - tilemap address
     ld e, $00 ; Set DE to $9800 - tilemap address
-
     call GetTileAtPosition ; Get ID of Tile over player
     ld [PLAYER_TILE_ID], a
     ;cp $60 ; Compare to floor tile
@@ -273,6 +260,43 @@ resolveXPenetrationShared ; Call takes 24 CPU cycles - check if it's worth mem t
     call GetTileAtPosition ; Get ID of Tile underneath player
     ld [PLAYER_TILE_ID], a
     call canCollide
+    ret
+
+; Position to check in HL (X,Y)
+resolveYPenetrationDownShared
+    push hl
+    call WorldToTileMap ; Convert Player position to Tilemap position
+
+    ld a, h
+    ld [PLAYER_TILE_X], a ; Store Tilemap position into memory
+    ld a, l
+    ld [PLAYER_TILE_Y], a ; Store Tilemap position into memory
+    ld b, h ; Load tilemap position X into B
+    ld c, l ; Load tilemap position Y into C - BC now contains tile player is contained in
+    ld d, $98 ; Set DE to $9800 - tilemap address
+    ld e, $00 ; Set DE to $9800 - tilemap address
+    call GetTileAtPosition ; Get ID of Tile underneath player
+    ld [PLAYER_TILE_ID], a
+
+    ;cp $60 ; Compare to floor tile
+    call canCollide
+    cp $00
+    jr nz, .skip ; If not floor tile, set grounded flag to 0 again
+    
+    ; RETURN 0
+    ld a, $00
+    jr .stop
+.skip
+    xor a
+    ld [PLAYER_DY], a ; reset velocity
+    call GetTileTopLeftWorldPosition ; right now, we don't care about collisions in any direction but down!
+    ld a, c
+    sub a, $08
+    ld [PLAYER_Y], a ; Reset player position
+    ; RETURN 1
+    ld a, $01
+.stop
+    pop hl
     ret
 
 SECTION "Echo OAM", WRAM0[$C100]

@@ -17,7 +17,37 @@ SECTION "Game", ROM0
 INCLUDE "Sprites/menu.inc"
 INCLUDE "Sprites/win.inc"
 INCLUDE "Sprites/map.inc"
+;INCLUDE "Sprites/mainmenu.inc"
 Start:
+;    ld a, IEF_HILO
+;    ld [rIE], a
+;    ei
+;    call TurnOffLCD
+;
+;    ld hl, $C100 ; clear OAM
+;    ld bc, $FE9F - _OAMRAM
+;    call memClear
+;
+;    ld hl, $8000 ; go to zero in first VRAM tileset
+;    ld de, mainmenu_tile_data ; Load tile data location
+;    ld bc, mainmenu_tile_data_size ; Load tile data size
+;    call memCopy ; Copy tile data to VRAM
+
+;    ld hl, $9000 ; go to zero in first VRAM tileset
+;    ld de, mainmenu_tile_data ; Load tile data location
+;    ld bc, mainmenu_tile_data_size ; Load tile data size
+;    call memCopy ; Copy tile data to VRAM
+
+;    ld hl, $9800 ; Load background location
+;    ld de, mainmenu_map_data ; Load tilemap location
+;    ld bc, mainmenu_tile_map_size ; Load tilemap size
+;    call memCopy ; Copy tilemap to background buffer
+
+ ;   ld a, %10000011 ;
+ ;   ld [rLCDC], a ; Enable LCD, Sprites and Background
+ ;   halt
+ ;   nop
+
     ld	a, IEF_VBLANK | IEF_LCDC; Enable v-blank interrupt only
     ld	[rIE], a 
     call CopyDMARoutine
@@ -77,16 +107,34 @@ Start:
     call init_player
     call init_tongue
     call init_beans
+    ld a, $02
+    ld [NEXT_BEAN], a
+    xor a
+    ld [FRAME], a
 
 .stop:
     halt
     nop
     ;call WaitVBlank
-    call update_player
     call update_beans
+    call update_player
     call update_tongue
     call renderScore
 
+    ld a, [FRAME]
+    SRL a ; 
+    jp c, .dontreset
+
+    ld a, [NEXT_BEAN]
+    cp $13
+    jr z, .reset
+    inc a
+    ld [NEXT_BEAN], a
+    jr .stop
+.reset
+    ld a, $02
+    ld [NEXT_BEAN], a
+.dontreset
 jr .stop
 
 renderScore:
@@ -105,7 +153,7 @@ renderScore:
 
     ld hl, $C100 ; clear OAM
     ld bc, $FE9F - _OAMRAM
-    call memClear ; Copy tile data to VRAM
+    call memClear ; Clear
 
     ld hl, $9000 ; go to zero in first VRAM tileset
     ld de, win_tile_data ; Load tile data location
@@ -157,6 +205,9 @@ GAME_PAUSED : DS 1
 GAME_OVER : DS 1
 GAME_SCORE : DS 1
 GAME_LEVEL : DS 1
+NEXT_BEAN : DS 1
+FRAME : DS 1
+RandomPtr : DS 1
 
 SECTION "Font", ROM0
 

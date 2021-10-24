@@ -1,5 +1,5 @@
 SECTION "Beans", ROM0
-BEAN_POOL_SIZE EQU $01 ; The number of beans to initialise into the pool
+BEAN_POOL_SIZE EQU $03 ; The number of beans to initialise into the pool
 
 init_beans:
     ld hl, $C14C
@@ -46,12 +46,11 @@ GetNextBeanAisle: ; Fetch a random number from the Bean Random Number Table;
 update_beans:
     xor a ; zero out a
     ld hl, $C14C ; Load the echo OAM address into hl
-    ; temporarily remove FRAME counter as it shared a memory address with the x-pos of the second bean (oops!)
-    ld a, [FRAME]
-    inc a
-    ld [FRAME], a ; Increment the frame counter
-    SRL a ; 
-    jp c, .stop
+    ;ld a, [FRAME]
+    ;inc a
+    ;ld [FRAME], a ; Increment the frame counter
+    ;SRL a ; 
+    ;jp c, .stop
     xor a
 
 .repeatstuff
@@ -108,15 +107,18 @@ update_beans:
     ld b, a ; into h
     ld a, [PLAYER_Y] ; load the tongue tip y-pos
     ld c, a ; into l
-    call checkOverlap ; check if bc overlaps with hl (if the tongue overlaps with the current bean)
+    call checkOverlap ; check if bc overlaps with hl (if the PLAYER overlaps with the current bean)
     ;ld [GAME_LEVEL], a ; if it is, set the tongue to eating so it knows to retract
+    ld [GAME_OVER], a
     pop hl ; restore hl
+    cp $01
+    jr z, .stop
 
 
     ld a, [hl] ; Load the Y-Pos into a
     inc a ; Add one to the Y-Pos
     ld [hl], a ; Restore the Y-Pos
-    cp $87 ; $87 is the floor pos
+    cp $90 ; $87 is the floor pos
     jr nz, .dontDestroy ; if we are not at the floor pos, skip to dontDestroy
     ld a, [NEXT_BEAN]
     sla a
@@ -139,7 +141,14 @@ update_beans:
     ld a, [hl]
     cp $2C
     jr z, .dontReplace
+    cp $66
+    jr z, .replaceAir
+.replaceBroken
+    ld a, $66
+    jr .doReplace
+.replaceAir
     ld a, $2C
+.doReplace
     ld [hl], a
     ld a, $C0
     ld [rNR44], a ; Play noise

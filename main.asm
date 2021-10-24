@@ -17,7 +17,8 @@ SECTION "Game", ROM0
 INCLUDE "Sprites/menu.inc"
 INCLUDE "Sprites/win.inc"
 INCLUDE "Sprites/map.inc"
-;INCLUDE "Sprites/mainmenu.inc"
+INCLUDE "Sprites/beanrandomtable.inc"
+INCLUDE "Sprites/mainmenu.inc"
 Start:
 ;    ld a, IEF_HILO
 ;    ld [rIE], a
@@ -48,7 +49,7 @@ Start:
  ;   halt
  ;   nop
 
-    ld	a, IEF_VBLANK | IEF_LCDC; Enable v-blank interrupt only
+    ld	a, IEF_VBLANK | IEF_LCDC ; Enable v-blank interrupt only
     ld	[rIE], a 
     call CopyDMARoutine
     ei
@@ -102,7 +103,7 @@ Start:
     ld [rAUDVOL], a
     ld a, %11111111
     ld [rAUDTERM], a
-    ld a, %10000011 ;
+    ld a, %10000111 ;
     ld [rLCDC], a ; Enable LCD, Sprites and Background
     call init_player
     call init_tongue
@@ -113,14 +114,16 @@ Start:
     ld [FRAME], a
 
 .stop:
+    ld a, [GAME_OVER]
+    cp $01
+    jr z, .gameOver
     halt
     nop
-    ;call WaitVBlank
+    ; Potentially move bean tilemap updating code into v-blank interrupt
     call update_beans
     call update_player
     call update_tongue
     call renderScore
-
     ld a, [FRAME]
     SRL a ; 
     jp c, .dontreset
@@ -136,6 +139,68 @@ Start:
     ld [NEXT_BEAN], a
 .dontreset
 jr .stop
+
+.gameOver
+    ld a, IEF_VBLANK | IEF_LCDC
+    ld [rIE], a
+    ei
+    ld a, $FF
+    ld b, a
+.fadeout
+    ld a, b
+    call StepFadeOutCurrentPallete
+    halt
+    nop
+    ld a, b
+    dec a
+    ld b, a
+    cp $00
+    jr nz, .fadeout
+.doneFadeOut
+    di
+    ld a, IEF_HILO
+    ld [rIE], a
+    ei
+    xor a
+    ld [GAME_OVER], a
+    call TurnOffLCD
+    ld hl, $FE00 ; clear OAM
+    ld bc, $FE9F - _OAMRAM
+    call memClear ; Copy tile data to VRAM
+
+    ld hl, $8000 ; go to zero in first VRAM tileset
+    ld de, mainmenu_tile_data ; Load tile data location
+    ld bc, mainmenu_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9000 ; go to zero in first VRAM tileset
+    ld de, mainmenu_tile_data ; Load tile data location
+    ld bc, mainmenu_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9800 ; Load background location
+    ld de, mainmenu_map_data ; Load tilemap location
+    ld bc, mainmenu_tile_map_size ; Load tilemap size
+    call memCopy ; Copy tilemap to background buffer
+
+    ld a, %10000011 ;
+    ld [rLCDC], a ; Enable LCD, Sprites and Background
+    ld a, $FF
+    ld b, a
+.fadein
+    ld a, b
+    call StepFadeInCurrentPallete
+    halt
+    nop
+    ld a, b
+    dec a
+    ld b, a
+    cp $00
+    jr nz, .fadein
+.doneFadeIn
+    halt
+    nop
+    jp .stop
 
 renderScore:
     ld a, [GAME_LEVEL]
@@ -206,6 +271,7 @@ GAME_OVER : DS 1
 GAME_SCORE : DS 1
 GAME_LEVEL : DS 1
 NEXT_BEAN : DS 1
+ACTIVE_BEANS : DS 1
 FRAME : DS 1
 RandomPtr : DS 1
 

@@ -100,6 +100,50 @@ update_player:
     
 .jumpEnd
 
+
+.applyXVelocity:
+    ld a, [PLAYER_DX]
+    ld b, a
+    ld a, [PLAYER_X]
+    add a, b
+    ld [PLAYER_X], a
+
+    ld a, [PLAYER_DX]
+    bit OAMB_PRI, a
+    jr nz, .resolveXPenetrationLeft ; Are we going left or right?
+
+.resolveXPenetrationRight
+    ld a, [PLAYER_X] ; Load Player X pos into H
+    add a, $08
+    call resolveXPenetrationShared
+    cp $00
+    jr z, .applyYVelocity ; If not floor tile, set grounded flag to 0 again
+
+    xor a
+    ld [PLAYER_DX], a ; reset velocity
+
+    call GetTileTopLeftWorldPosition ; Get the left pos of the tile
+    ld a, b
+    sub a, $08
+    ld [PLAYER_X], a ; Reset player position
+    jr .applyYVelocity
+
+.resolveXPenetrationLeft
+    ld a, [PLAYER_X] ; Load Player X pos into H
+
+    call resolveXPenetrationShared
+    cp $00
+    jr z, .applyYVelocity ; If not floor tile, set grounded flag to 0 again
+
+    xor a
+    ld [PLAYER_DX], a ; reset velocity
+
+    call GetTileBottomRightWorldPosition ; Get the left pos of the tile
+    ld a, b
+    ld [PLAYER_X], a ; Reset player position
+    jr .applyYVelocity
+
+    
 .applyYVelocity:
     ld a, [PLAYER_DY] ; Load Player delta Y into a
     ld b, a ; move to B reg
@@ -139,7 +183,7 @@ update_player:
     ld [PLAYER_IS_GROUNDED], a
     ld a, $6A
     ld [PLAYER_SPRITE], a
-    jr .applyXVelocity
+    jr .stop
 
 
 .resolveYPenetrationUp ; TODO there is a lot of duplicate code between here and resolveYPenetrationDown
@@ -170,7 +214,7 @@ update_player:
     call GetTileBottomRightWorldPosition ; right now, we don't care about collisions in any direction but down!
     ld a, c   
     ld [PLAYER_Y], a ; Reset player position
-    jr .applyXVelocity
+    jr .stop
 
 
 .resetGrounded
@@ -179,54 +223,15 @@ update_player:
     ld a, $6B
     ld [PLAYER_SPRITE], a
 
-.applyXVelocity:
-    ld a, [PLAYER_DX]
-    ld b, a
-    ld a, [PLAYER_X]
-    add a, b
-    ld [PLAYER_X], a
-
-    ld a, [PLAYER_DX]
-    bit OAMB_PRI, a
-    jr nz, .resolveXPenetrationLeft ; Are we going left or right?
-
-.resolveXPenetrationRight
-    ld a, [PLAYER_X] ; Load Player X pos into H
-    add a, $08
-    call resolveXPenetrationShared
-    cp $00
-    jr z, .stop ; If not floor tile, set grounded flag to 0 again
-
-    xor a
-    ld [PLAYER_DX], a ; reset velocity
-
-    call GetTileTopLeftWorldPosition ; Get the left pos of the tile
-    ld a, b
-    sub a, $08  
-    ld [PLAYER_X], a ; Reset player position
-    jr .stop
-
-.resolveXPenetrationLeft
-    ld a, [PLAYER_X] ; Load Player X pos into H
-
-    call resolveXPenetrationShared
-    cp $00
-    jr z, .stop ; If not floor tile, set grounded flag to 0 again
-
-    xor a
-    ld [PLAYER_DX], a ; reset velocity
-
-    call GetTileBottomRightWorldPosition ; Get the left pos of the tile
-    ld a, b
-    ld [PLAYER_X], a ; Reset player position
-    jr .stop
-
 .stop
     ret
 
 ; Tile ID in A, returns whether it is floor in A (0 for no)
 canCollide
-    cp $60 ; floor tile
+    cp $68 ; floor tile
+    jr z, .can
+
+    cp $66 ; floor tile
     jr z, .can
 
     cp $64 ; brick tile

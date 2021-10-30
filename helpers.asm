@@ -126,7 +126,14 @@ ScrollBGUpLim:
     ret
 
 
-StepFadeOutCurrentPallete:
+StepFadeOutDefaultPallete:
+    cp $10
+    jr z, .black
+    cp $06
+    jr z, .darkgrey
+    cp $02
+    jr z, .lightgrey
+    jr .ret
 .black
     ld a, [rBGP]
     cp $E4
@@ -155,7 +162,14 @@ StepFadeOutCurrentPallete:
 .ret
     ret
 
-StepFadeInCurrentPallete:
+StepFadeInDefaultPallete:
+    cp $10
+    jr z, .black
+    cp $06
+    jr z, .darkgrey
+    cp $02
+    jr z, .lightgrey
+    jr .ret
 .black
     ld a, [rBGP]
     cp $00
@@ -181,41 +195,6 @@ StepFadeInCurrentPallete:
     ld [rOBP0], a
     jr .ret
 .white
-.ret
-    ret
-
-StepFadeOut:
-    cp $10
-    jr nz, .next
-    ld a, %11100100 ; Set palette
-    ld [rBGP], a
-    ld a, %11100100
-    ld [rOBP0], a
-    jr .ret
-.next
-    cp $08
-    jr nz, .next2
-    ld a, %11110110 ; Set palette
-    ld [rBGP], a
-    ld a, %11100100
-    ld [rOBP0], a
-    jr .ret
-.next2
-    cp $04
-    jr nz, .next3
-    ld a, %11111110 ; Set palette
-    ld [rBGP], a
-    ld a, %11111110
-    ld [rOBP0], a
-    jr .ret
-.next3
-    cp $01
-    jr nz, .ret
-    ld a, %11111111 ; Set palette
-    ld [rBGP], a
-    ld a, %11111111
-    ld [rOBP0], a
-    jr .ret
 .ret
     ret
 

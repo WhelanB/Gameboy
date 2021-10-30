@@ -24,16 +24,16 @@ jumpToPlayerPosOffset:
     jr z, .handleLeftXPos
 .handleRightXPos
     ld a, [PLAYER_X]
-    add a, $07
+    add a, $05
     ld [TONGUE_X], a
     jr .handleYPos
 .handleLeftXPos
     ld a, [PLAYER_X]
-    sub a, $07
+    sub a, $05
     ld [TONGUE_X], a
 .handleYPos
     ld a, [PLAYER_Y]
-    sub a, $07
+    sub a, $05
     ld [TONGUE_Y], a
     ret
     

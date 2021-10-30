@@ -19,6 +19,7 @@ INCLUDE "Sprites/win.inc"
 INCLUDE "Sprites/map.inc"
 INCLUDE "Sprites/beanrandomtable.inc"
 INCLUDE "Sprites/mainmenu.inc"
+
 Start:
 ;    ld a, IEF_HILO
 ;    ld [rIE], a
@@ -89,14 +90,6 @@ Start:
     ld a, $01
     ld [GAME_LEVEL], a ; Set first level to 1
 
-    ld a, $88
-    ld [$C100], a
-    ld a, $22
-    ld [$C101], a
-    ld a, $6A
-    ld [$C102], a
-    xor a
-    ld [$C103], a
 
 ;    ld [rNR52], a ; Disable sound
     ld a, %01110111
@@ -113,6 +106,7 @@ Start:
     xor a
     ld [FRAME], a
 
+; MAIN GAME LOOP
 .stop:
     ld a, [GAME_OVER]
     cp $01
@@ -140,31 +134,22 @@ Start:
 .dontreset
 jr .stop
 
+
+
+; GAME OVER PROCESS
 .gameOver
-    ld a, IEF_VBLANK | IEF_LCDC
-    ld [rIE], a
-    ei
-    ld a, $FF
-    ld b, a
-.fadeout
-    ld a, b
-    call StepFadeOutCurrentPallete
+
+; FADE OUT THE SCREEN TO WHITE
+    call fadeOut
+
     halt
     nop
-    ld a, b
-    dec a
-    ld b, a
-    cp $00
-    jr nz, .fadeout
-.doneFadeOut
-    di
-    ld a, IEF_HILO
-    ld [rIE], a
-    ei
     xor a
-    ld [GAME_OVER], a
-    call TurnOffLCD
-    ld hl, $FE00 ; clear OAM
+    ld [GAME_OVER], a ; reset game over flag
+
+
+    call TurnOffLCD ; turn off the LCD and load the game over screen
+    ld hl, $C100 ; clear OAM
     ld bc, $FE9F - _OAMRAM
     call memClear ; Copy tile data to VRAM
 
@@ -185,22 +170,61 @@ jr .stop
 
     ld a, %10000011 ;
     ld [rLCDC], a ; Enable LCD, Sprites and Background
-    ld a, $FF
+
+    call fadeIn ; fade back in
+.loopi
+    jp .loopi
+
+
+wait:
+    ld a, %00000110
+    ld [rTAC], a
+    ld a, $00
+    ld [rTMA], a
+    di
+    ld	a, IEF_TIMER
+    ld	[rIE], a
+    ei
+    halt
+    nop
+    di
+    ld	a, IEF_VBLANK | IEF_LCDC
+    ld	[rIE], a
+    ei
+    ret
+
+
+fadeIn:
+    ld a, $10
     ld b, a
 .fadein
     ld a, b
-    call StepFadeInCurrentPallete
+    call StepFadeInDefaultPallete
     halt
     nop
     ld a, b
     dec a
     ld b, a
-    cp $00
+    cp $01
     jr nz, .fadein
 .doneFadeIn
+    ret
+
+fadeOut:
+    ld a, $10
+    ld b, a
+.fadeout
+    ld a, b
+    call StepFadeOutDefaultPallete
     halt
     nop
-    jp .stop
+    ld a, b
+    dec a
+    ld b, a
+    cp $01
+    jr nz, .fadeout
+.doneFadeOut
+    ret
 
 renderScore:
     ld a, [GAME_LEVEL]

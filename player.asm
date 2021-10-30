@@ -11,10 +11,26 @@ init_player:
     ld [PLAYER_DX], a
     ld a, $01
     ld [PLAYER_FACING], a
+    ld a, $88
+    ld [PLAYER_Y], a
+    ld a, $22
+    ld [PLAYER_X], a
+    ld a, $6A
+    ld [$C102], a
+    xor a
+    ld [$C103], a
+
     ret
 
 
 update_player:
+    ld a, [PLAYER_Y]
+    cp $9A
+    jr nz, .notOOB
+    ld a, $01
+    ld [GAME_OVER], a
+    ret
+.notOOB
     call SampleInput ; Sample d-pad and buttons
     ld c, a ; Store state of input in c - should probably move this to ram
     ;cp 0 ; If no keys pressed, try again!
@@ -181,7 +197,7 @@ update_player:
     jr z, .resetGrounded
     ld a, $01
     ld [PLAYER_IS_GROUNDED], a
-    ld a, $6A
+    ld a, $72
     ld [PLAYER_SPRITE], a
     jr .stop
 
@@ -302,11 +318,19 @@ resolveYPenetrationDownShared
     ld a, $01
 .stop
     pop hl
+    ; 16X16 EXPERIMENT
+    ld b, a
+    ld a, [PLAYER_Y]
+    sub $08
+    ld [PLAYER_SPRITE_Y], a
+    ld a, [PLAYER_X]
+    ld [PLAYER_SPRITE_X], a
+    ld a, b
     ret
 
 SECTION "Echo OAM", WRAM0[$C100]
-PLAYER_Y: DS 1
-PLAYER_X: DS 1
+PLAYER_SPRITE_Y: DS 1
+PLAYER_SPRITE_X: DS 1
 PLAYER_SPRITE: DS 1
 PLAYER_ATTRIBUTE : DS 1
 
@@ -321,3 +345,6 @@ PLAYER_TILE_ID : DS 1
 PLAYER_TILE_TOP_X : DS 1
 PLAYER_TILE_TOP_Y : DS 1
 PLAYER_FACING: DS 1
+
+PLAYER_Y: DS 1
+PLAYER_X: DS 1

@@ -1,25 +1,41 @@
 SECTION "Beans", ROM0
 BEAN_POOL_SIZE EQU $03 ; The number of beans to initialise into the pool
 
+; init_beans
+; This iterates over the area of WRAM allocated for beans
+; First, configure sound and frame counter
+; Next, for the number of beans defined in BEAN_POOL_SIZE, we:
+;       Set Bean start Y-pos to 0
+;       Set Bean start X-pos to bean index * 8 + offset for walls
+;       Set Bean sprite to $68 (see map.inc)
+;       Zero out the sprite attribute field
 init_beans:
+    ld a, $3D ; 3f
+    ld [rNR41], a
+    ld a, $53 ; a1
+    ld [rNR42], a
+    ld a, $60 ; 00
+    ld [rNR43], a
+    ld a, $C0
+    ld [rNR44], a ; Hard-coded values to configure the bean destroy sound-effect
     ld hl, $C14C
+
     xor a
-    ld [FRAME], a
+    ld [FRAME], a ; zero out the frame counter, a temporary way of controlling bean speed
 
 .repeat ; Initialise the falling beans in VRAM
     ld d, a ; cache the loop index in d so we can perform arithmetic on a
-    sla a
-    sla a
-    sla a ; multiply the index by 8
+    xor a
     ldi [hl], a ; zero out the y-pos and increment
     ld a, d ; restore the index into a
+    call GetNextBeanAisle
     sla a
     sla a
-    sla a ; multiply the index by 8
+    sla a
     add a, $10; add $10, since x pos is -8 and there are walls at the side of the map
     ldi [hl], a
-    ld a, $69
-    ldi [hl], a ; Set sprite to tile 69
+    ld a, $68
+    ldi [hl], a ; Set sprite to tile 68
     xor a
     ldi [hl], a ; Set sprite attributes to 0
     ld a, d ; Restore index back into a
@@ -28,7 +44,9 @@ init_beans:
     jr nz, .repeat
     ret ; Otherwise, return
     
-GetNextBeanAisle: ; Fetch a random number from the Bean Random Number Table;
+; GetNextBeanAisle
+; Read a random number from the BeanRandomTable and return it (next aisle for the bean to fall in)
+GetNextBeanAisle:
         push    hl
         ld      a, [RandomPtr]
         inc     a
@@ -46,11 +64,11 @@ GetNextBeanAisle: ; Fetch a random number from the Bean Random Number Table;
 update_beans:
     xor a ; zero out a
     ld hl, $C14C ; Load the echo OAM address into hl
-    ;ld a, [FRAME]
-    ;inc a
-    ;ld [FRAME], a ; Increment the frame counter
-    ;SRL a ; 
-    ;jp c, .stop
+    ld a, [FRAME]
+    inc a
+    ld [FRAME], a ; Increment the frame counter, which controls bean speed
+    SRL a ; 
+    jp c, .stop
     xor a
 
 .repeatstuff
@@ -67,6 +85,7 @@ update_beans:
     ; CHECK OVERLAP WITH TONGUE
     push hl ; save hl, since it is used as a memory address
     ld a, [hl] ; load the current bean y-pos
+    add a, $08
     ld c, a ; into c
     inc hl ; inc hl to get x-pos
     ld a, [hl] ; load the current bean x-pos
@@ -80,6 +99,8 @@ update_beans:
     pop hl ; restore hl
     cp $00 ; if the result of checkOverlap was 0
     jr z, .skipcoltest ; skip the next section
+
+; RESET BEAN
     xor a
     ld [hl], a ; load zero into location at hl (resets the y-pos of the current bean)
     inc hl ; REMOVE ME
@@ -93,32 +114,74 @@ update_beans:
     inc a ; increment a
     daa ; convert to binary-coded decimal
     ld [GAME_SCORE], a ; set the current game score to a
+
+
 .skipcoltest
     ; CHECK OVERLAP WITH PLAYER
     push hl ; save hl, since it is used as a memory address
     ld a, [hl] ; load the current bean y-pos
+    add $10 ; Add 16 to offset to bottom of 8x16 sprite
     ld c, a ; into c
     inc hl ; inc hl to get x-pos
     ld a, [hl] ; load the current bean x-pos
     ld b, a ; into b
     ld h, b
     ld l, c
-    ld a, [PLAYER_X] ; load the tongue tip x-pos
+    ld a, [PLAYER_X] ; load the player x-pos
     ld b, a ; into h
-    ld a, [PLAYER_Y] ; load the tongue tip y-pos
+    ld a, [PLAYER_Y] ; load the player y-pos
+    add a, $08
     ld c, a ; into l
-    call checkOverlap ; check if bc overlaps with hl (if the PLAYER overlaps with the current bean)
-    ;ld [GAME_LEVEL], a ; if it is, set the tongue to eating so it knows to retract
+    call checkOverlapLarge ; check if bc overlaps with hl (if the PLAYER overlaps with the current bean)
+    pop hl
+    cp $01
+    jr z, .hitPlayer ; handle collision logic
+    jr .idekam
+
+.hitPlayer
+    ld a, [PLAYER_IS_GROUNDED]
+    cp $01
+    jr z, .isGrounded ; if the player is grounded, game over man, game over!
+
+    xor a
+    ld [hl], a ; load zero into location at hl (resets the y-pos of the current bean)
+    inc hl ; REMOVE ME
+    call GetNextBeanAisle
+    sla a
+    sla a
+    sla a
+    ld [hl], a
+    dec hl
+    ld a, [GAME_SCORE] ; load the current score into a
+    inc a ; increment a
+    daa ; convert to binary-coded decimal, so we can render it easily
+    ld [GAME_SCORE], a ; set the current game score to a
+    ld a, $25 ; 3f
+    ld [rNR10], a
+    ld a, $84 ; a1
+    ld [rNR11], a
+    ld a, $45 ; 00
+    ld [rNR12], a
+    ld a, $9A
+    ld [rNR13], a ; Play noise
+    ld a, $86
+    ld [rNR14], a
+    ld a, $01
+    jr .idekam
+
+
+.isGrounded
+    ld a, $01
     ld [GAME_OVER], a
-    pop hl ; restore hl
     cp $01
     jr z, .stop
 
-
+    
+.idekam
     ld a, [hl] ; Load the Y-Pos into a
     inc a ; Add one to the Y-Pos
     ld [hl], a ; Restore the Y-Pos
-    cp $90 ; $87 is the floor pos
+    cp $88 ; $87 is the floor pos
     jr nz, .dontDestroy ; if we are not at the floor pos, skip to dontDestroy
     ld a, [NEXT_BEAN]
     sla a
@@ -141,10 +204,10 @@ update_beans:
     ld a, [hl]
     cp $2C
     jr z, .dontReplace
-    cp $66
+    cp $65
     jr z, .replaceAir
 .replaceBroken
-    ld a, $66
+    ld a, $65
     jr .doReplace
 .replaceAir
     ld a, $2C

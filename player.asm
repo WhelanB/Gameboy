@@ -9,8 +9,11 @@ init_player:
     xor a
     ld [PLAYER_DY], a
     ld [PLAYER_DX], a
+    ld [PLAYER_STEP_COUNT], a
     ld a, $01
     ld [PLAYER_FACING], a
+
+    ; config player pos and sprite
     ld a, $88
     ld [PLAYER_Y], a
     ld a, $22
@@ -20,10 +23,40 @@ init_player:
     xor a
     ld [$C103], a
 
+
+    ld a, $72
+    ld [PLAYER_SPRITE_BACK], a
+    xor a
+    ld [PLAYER_ATTRIBUTE_BACK], a
+
     ret
 
 
 update_player:
+    ; 16X16 EXPERIMENT
+    ld a, [PLAYER_FACING] ; Load the direction the player is facing
+    cp $00 ; if they are facing right, continue
+    jr nz, .left ; otherwise, handle facing left
+    ld a, $08 ; if they are facing right, add 8 to the sprite X-pos
+    ld b, a
+    jr .over
+.left
+    ld a, $F8
+    ld b, a
+.over
+    ld a, [PLAYER_X]
+    ld [PLAYER_SPRITE_X], a
+    add b
+    ld [PLAYER_SPRITE_BACK_X], a
+    ld a, [PLAYER_Y]
+    sub $08
+    ld [PLAYER_SPRITE_Y], a
+    ld [PLAYER_SPRITE_BACK_Y], a
+    ld a, [PLAYER_ATTRIBUTE]
+    ld [PLAYER_ATTRIBUTE_BACK], a
+
+
+
     ld a, [PLAYER_Y]
     cp $9A
     jr nz, .notOOB
@@ -42,6 +75,10 @@ update_player:
     ld a, c
     bit PADB_B, a
     jr z, .testLeft
+    ld a, $78
+    ld [PLAYER_SPRITE], a
+    ld a, $76
+    ld [PLAYER_SPRITE_BACK], a
     ret
 .testLeft
     ld a, c
@@ -76,24 +113,32 @@ update_player:
 
     ; If the grounded flag is set:
 .grounded
+    ld a, [PLAYER_STEP_COUNT]
+    cp $08
+    jr nz, .dontResetStepCount
+    xor a
+    ld [PLAYER_STEP_COUNT], a
+.dontResetStepCount
+    inc a
+    ld [PLAYER_STEP_COUNT], a
+
     ld a, c ; Restore key state
     bit PADB_A, a ; Check for button A down
     jr z, .jumpEnd ; If A not pressed, skip
 
     ; If A is pressed, and we're grounded:
  .jumpPressed
-    ld a, $79
+    ld a, $77
     ld [rNR10], a
-    ld a, $88
+    ld a, $84
     ld [rNR11], a
-    ld a, $6A
+    ld a, $45
     ld [rNR12], a
-    ld a, $9D
+    ld a, $9A
     ld [rNR13], a
-    ld a, $C6
+    ld a, $86
     ld [rNR14], a
-    ld a, $01
-    ld [PLAYER_IS_GROUNDED], a ; Set the grounded flag?
+
     ld a, PLAYER_JUMP_VEL ; Load the jump velocity
     ld b, a ; move to B reg
     ld a, [PLAYER_DY] ; Load Player delta Y
@@ -177,9 +222,9 @@ update_player:
     jr nz, .resolveYPenetrationUp ; Only check for collisions if we're falling
 
 
-.resolveYPenetrationDown ; Need to fix clipping at edge of tile on right side
+.resolveYPenetrationDown
     ld a, [PLAYER_X] ; Load Player X pos into H
-    add a, $02
+    add a, $02 ; Offset it  by 2
     ld h, a
     ld a, [PLAYER_Y] ; Load Player Y pos into L - HL now contains position
     add a, $08 ; bottom of player
@@ -197,8 +242,19 @@ update_player:
     jr z, .resetGrounded
     ld a, $01
     ld [PLAYER_IS_GROUNDED], a
-    ld a, $72
+
+
+    ld hl, PLAYER_IDLE_ANIM
+    xor a
+    ld b, a
+    ld a, [PLAYER_STEP_COUNT]
+    ld c, a
+    add hl, bc
+    ld a, [hl]
     ld [PLAYER_SPRITE], a
+    sub $02
+    ld [PLAYER_SPRITE_BACK], a
+
     jr .stop
 
 
@@ -236,18 +292,20 @@ update_player:
 .resetGrounded
     xor a
     ld [PLAYER_IS_GROUNDED], a
-    ld a, $6B
+    ld a, $78
     ld [PLAYER_SPRITE], a
+    ld a, $76
+    ld [PLAYER_SPRITE_BACK], a
 
 .stop
     ret
 
 ; Tile ID in A, returns whether it is floor in A (0 for no)
 canCollide
-    cp $68 ; floor tile
+    cp $67 ; floor tile
     jr z, .can
 
-    cp $66 ; floor tile
+    cp $65 ; floor tile
     jr z, .can
 
     cp $64 ; brick tile
@@ -318,14 +376,6 @@ resolveYPenetrationDownShared
     ld a, $01
 .stop
     pop hl
-    ; 16X16 EXPERIMENT
-    ld b, a
-    ld a, [PLAYER_Y]
-    sub $08
-    ld [PLAYER_SPRITE_Y], a
-    ld a, [PLAYER_X]
-    ld [PLAYER_SPRITE_X], a
-    ld a, b
     ret
 
 SECTION "Echo OAM", WRAM0[$C100]
@@ -333,6 +383,11 @@ PLAYER_SPRITE_Y: DS 1
 PLAYER_SPRITE_X: DS 1
 PLAYER_SPRITE: DS 1
 PLAYER_ATTRIBUTE : DS 1
+
+PLAYER_SPRITE_BACK_Y: DS 1
+PLAYER_SPRITE_BACK_X: DS 1
+PLAYER_SPRITE_BACK: DS 1
+PLAYER_ATTRIBUTE_BACK : DS 1
 
 SECTION "Player Values", WRAM0[$C300]
 PLAYER_DY : DS 1
@@ -345,6 +400,7 @@ PLAYER_TILE_ID : DS 1
 PLAYER_TILE_TOP_X : DS 1
 PLAYER_TILE_TOP_Y : DS 1
 PLAYER_FACING: DS 1
+PLAYER_STEP_COUNT : DS 1
 
 PLAYER_Y: DS 1
 PLAYER_X: DS 1

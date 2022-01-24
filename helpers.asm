@@ -337,7 +337,7 @@ stringCopy:
     ld [hli], a
     jr stringCopy
 
-; Check if one sprite position intersects with another
+; Check if one sprite position intersects with another (8x8)
 ; @param bc - X1Y1 position of the first sprite
 ; @param hl - X2Y2 position of the second sprite
 ; @return a - zero if no overlap, one if overlap
@@ -354,16 +354,56 @@ checkOverlap:
     cp h ; Compare against X1
     jr nc, .lte 
 
-    ld a, c ; Load X1
-    add a, $08 ; Add the width
-    cp l ; Compare against X2
+    ld a, c ; Load Y1
+    add a, $08 ; Add the height
+    cp l ; Compare against Y2
     jr c, .retNoColl
 
-    ld a, l ; Load X2
-    add a, $08 ; Add the width
+    ld a, l ; Load Y2
+    add a, $08 ; Add the height
     ld l, a
     ld a, c
-    cp l ; Compare against X1
+    cp l ; Compare against Y1
+    jr nc, .lte 
+
+.retColl
+    ld a, $01
+    ret
+.lte
+    jr nz, .retNoColl
+    jp .retNoColl
+.retNoColl
+    xor a
+    ret
+
+
+; Check if one sprite position intersects with another (8x16)
+; @param bc - X1Y1 position of the first sprite
+; @param hl - X2Y2 position of the second sprite
+; @return a - zero if no overlap, one if overlap
+checkOverlapLarge:
+    ld a, b ; Load X1
+    add a, $08 ; Add the width
+    cp h ; Compare against X2
+    jr c, .retNoColl
+
+    ld a, h ; Load X2
+    add a, $08 ; Add the width
+    ld h, a
+    ld a, b
+    cp h ; Compare against X1
+    jr nc, .lte 
+
+    ld a, c ; Load Y1
+    add a, $10 ; Add the height
+    cp l ; Compare against Y2
+    jr c, .retNoColl
+
+    ld a, l ; Load Y2
+    add a, $10 ; Add the height
+    ld l, a
+    ld a, c
+    cp l ; Compare against Y1
     jr nc, .lte 
 
 .retColl

@@ -14,50 +14,92 @@ REPT $150 - $104
 ENDR
 
 SECTION "Game", ROM0
-INCLUDE "Sprites/menu.inc"
-INCLUDE "Sprites/win.inc"
 INCLUDE "Sprites/map.inc"
 INCLUDE "Sprites/beanrandomtable.inc"
+INCLUDE "Sprites/startscreen.inc"
 INCLUDE "Sprites/mainmenu.inc"
+INCLUDE "Sprites/controls.inc"
 
 Start:
-;    ld a, IEF_HILO
-;    ld [rIE], a
-;    ei
-;    call TurnOffLCD
-;
-;    ld hl, $C100 ; clear OAM
-;    ld bc, $FE9F - _OAMRAM
-;    call memClear
-;
-;    ld hl, $8000 ; go to zero in first VRAM tileset
-;    ld de, mainmenu_tile_data ; Load tile data location
-;    ld bc, mainmenu_tile_data_size ; Load tile data size
-;    call memCopy ; Copy tile data to VRAM
 
-;    ld hl, $9000 ; go to zero in first VRAM tileset
-;    ld de, mainmenu_tile_data ; Load tile data location
-;    ld bc, mainmenu_tile_data_size ; Load tile data size
-;    call memCopy ; Copy tile data to VRAM
 
-;    ld hl, $9800 ; Load background location
-;    ld de, mainmenu_map_data ; Load tilemap location
-;    ld bc, mainmenu_tile_map_size ; Load tilemap size
-;    call memCopy ; Copy tilemap to background buffer
-
- ;   ld a, %10000011 ;
- ;   ld [rLCDC], a ; Enable LCD, Sprites and Background
- ;   halt
- ;   nop
 
     ld	a, IEF_VBLANK | IEF_LCDC ; Enable v-blank interrupt only
     ld	[rIE], a 
     call CopyDMARoutine
     ei
 
-    ;call WaitVBlank
-    halt ; Halt stops CPU until interrupt (v-blank) occurs
-    nop ; nop, because of Halt bug
+LD SP,$E000
+; GAME OVER PROCESS
+.controlsScreen
+
+    call TurnOffLCD ; turn off the LCD and load the game over screen
+    ld hl, $C100 ; clear OAM
+    ld bc, $FE9F - _OAMRAM
+    call memClear ; Copy tile data to VRAM
+
+    ld hl, $8000 ; go to zero in first VRAM tileset
+    ld de, startscreen_tile_data ; Load tile data location
+    ld bc, startscreen_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9000 ; go to zero in first VRAM tileset
+    ld de, startscreen_tile_data ; Load tile data location
+    ld bc, startscreen_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9800 ; Load background location
+    ld de, startscreen_map_data ; Load tilemap location
+    ld bc, startscreen_tile_map_size ; Load tilemap size
+    call memCopy ; Copy tilemap to background buffer
+
+    ld a, %11100100 ; Set palette
+    ld [rBGP], a
+    ld a, %11100100
+    ld [rOBP0], a
+    ld a, %10000011 ;
+    ld [rLCDC], a ; Enable LCD, Sprites and Background
+.loopk
+    halt
+    nop
+    call SampleInput
+    cp $00
+    jr z, .loopk
+; GAME OVER PROCESS
+.startScreen
+
+    call TurnOffLCD ; turn off the LCD and load the game over screen
+    ld hl, $C100 ; clear OAM
+    ld bc, $FE9F - _OAMRAM
+    call memClear ; Copy tile data to VRAM
+
+    ld hl, $8000 ; go to zero in first VRAM tileset
+    ld de, startscreen_tile_data ; Load tile data location
+    ld bc, startscreen_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9000 ; go to zero in first VRAM tileset
+    ld de, startscreen_tile_data ; Load tile data location
+    ld bc, startscreen_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9800 ; Load background location
+    ld de, startscreen_map_data ; Load tilemap location
+    ld bc, startscreen_tile_map_size ; Load tilemap size
+    call memCopy ; Copy tilemap to background buffer
+
+    ld a, %11100100 ; Set palette
+    ld [rBGP], a
+    ld a, %11100100
+    ld [rOBP0], a
+    ld a, %10000011 ;
+    ld [rLCDC], a ; Enable LCD, Sprites and Background
+.loopj
+    halt
+    nop
+    call SampleInput
+    cp $00
+    jr z, .loopj
 
     call TurnOffLCD
 
@@ -79,11 +121,6 @@ Start:
     ld de, map_map_data ; Load tilemap location
     ld bc, map_tile_map_size ; Load tilemap size
     call memCopy ; Copy tilemap to background buffer
-
-    ld a, %11100100 ; Set palette
-    ld [rBGP], a
-    ld a, %11100100
-    ld [rOBP0], a
 
     xor a
     ld [GAME_SCORE], a ; Set score to 0
@@ -173,7 +210,12 @@ jr .stop
 
     call fadeIn ; fade back in
 .loopi
-    jp .loopi
+    halt
+    nop
+    call SampleInput
+    cp $00
+    jr z, .loopi
+    jp Start
 
 
 wait:
@@ -236,26 +278,6 @@ renderScore:
 .incrementLevel
     ld a, [GAME_LEVEL]
     jp .cont
-    cp $10
-    jr nz, .cont
-    call TurnOffLCD
-
-    ld hl, $C100 ; clear OAM
-    ld bc, $FE9F - _OAMRAM
-    call memClear ; Clear
-
-    ld hl, $9000 ; go to zero in first VRAM tileset
-    ld de, win_tile_data ; Load tile data location
-    ld bc, win_tile_data_size ; Load tile data size
-    call memCopy ; Copy tile data to VRAM
-
-    ld hl, $9800 ; Load background location
-    ld de, win_map_data ; Load tilemap location
-    ld bc, win_tile_map_size ; Load tilemap size
-    call memCopy ; Copy tilemap to background buffer
-
-    ld a, %10000011 ;
-    ld [rLCDC], a ; Enable LCD, Sprites and Background
 .cont
     ld a, [GAME_LEVEL]
     add a, $01

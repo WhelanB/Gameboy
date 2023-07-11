@@ -1,8 +1,16 @@
+; TODO GAME FLOW
+; MAIN PRESS START MENU -> TEXT TUTORIAL -> GAMEPLAY
+; NEED TO FIGURE OUT RULES AND SPEED OF BEANS - every 100 until 3. then one additional after each 1000 that starts as a block restore?
+; BEAN HITTING HEAD COLLISION ZONE
+; HIGH SCORE FUNCTIONALITY?
+
+
 INCLUDE "hardware.inc"
 INCLUDE "helpers.asm"
 INCLUDE "player.asm"
 INCLUDE "tongue.asm"
 INCLUDE "beans.asm"
+INCLUDE "floor.asm"
 
 SECTION "Header", ROM0[$100]
 
@@ -30,42 +38,9 @@ Start:
     ei
 
 LD SP,$E000
-; GAME OVER PROCESS
-.controlsScreen
 
-    call TurnOffLCD ; turn off the LCD and load the game over screen
-    ld hl, $C100 ; clear OAM
-    ld bc, $FE9F - _OAMRAM
-    call memClear ; Copy tile data to VRAM
 
-    ld hl, $8000 ; go to zero in first VRAM tileset
-    ld de, startscreen_tile_data ; Load tile data location
-    ld bc, startscreen_tile_data_size ; Load tile data size
-    call memCopy ; Copy tile data to VRAM
 
-    ld hl, $9000 ; go to zero in first VRAM tileset
-    ld de, startscreen_tile_data ; Load tile data location
-    ld bc, startscreen_tile_data_size ; Load tile data size
-    call memCopy ; Copy tile data to VRAM
-
-    ld hl, $9800 ; Load background location
-    ld de, startscreen_map_data ; Load tilemap location
-    ld bc, startscreen_tile_map_size ; Load tilemap size
-    call memCopy ; Copy tilemap to background buffer
-
-    ld a, %11100100 ; Set palette
-    ld [rBGP], a
-    ld a, %11100100
-    ld [rOBP0], a
-    ld a, %10000011 ;
-    ld [rLCDC], a ; Enable LCD, Sprites and Background
-.loopk
-    halt
-    nop
-    call SampleInput
-    cp $00
-    jr z, .loopk
-; GAME OVER PROCESS
 .startScreen
 
     call TurnOffLCD ; turn off the LCD and load the game over screen
@@ -101,6 +76,20 @@ LD SP,$E000
     cp $00
     jr z, .loopj
 
+; scroll the main menu up and down to give controls etc
+    bit PADB_DOWN, a
+    jr z, .testUp
+    call ScrollBGUpLim
+    jr .loopj
+.testUp
+    bit PADB_UP, a
+    jr z, .startGame
+    call ScrollBGDownLim
+    jr .loopj
+
+
+.startGame
+    call ResetBGScroll
     call TurnOffLCD
 
     ld hl, $C100 ; clear OAM
@@ -124,8 +113,8 @@ LD SP,$E000
 
     xor a
     ld [GAME_SCORE], a ; Set score to 0
-    ld a, $01
     ld [GAME_LEVEL], a ; Set first level to 1
+    ld [GAME_LAST_INCREMENT], a
 
 
 ;    ld [rNR52], a ; Disable sound
@@ -138,6 +127,7 @@ LD SP,$E000
     call init_player
     call init_tongue
     call init_beans
+    call init_floor
     ld a, $02
     ld [NEXT_BEAN], a
     xor a
@@ -149,11 +139,15 @@ LD SP,$E000
     cp $01
     jr z, .gameOver
     halt
-    nop
+    nop ; Halt and nop until v-blank interrupt
     ; Potentially move bean tilemap updating code into v-blank interrupt
+    ld a, [GAME_LEVEL]
+    inc a
+    ld [ACTIVE_BEANS], a
     call update_beans
     call update_player
     call update_tongue
+    call update_floor
     call renderScore
     ld a, [FRAME]
     SRL a ; 
@@ -209,6 +203,7 @@ jr .stop
     ld [rLCDC], a ; Enable LCD, Sprites and Background
 
     call fadeIn ; fade back in
+    call renderScore
 .loopi
     halt
     nop
@@ -269,46 +264,54 @@ fadeOut:
     ret
 
 renderScore:
-    ld a, [GAME_LEVEL]
-    ld b, a
-    ld a, [GAME_SCORE]
-    cp b
-    jr z, .incrementLevel
-    jp .display
-.incrementLevel
-    ld a, [GAME_LEVEL]
-    jp .cont
-.cont
-    ld a, [GAME_LEVEL]
-    add a, $01
-    daa ; converts contents of a register into BCD
-    ld [GAME_LEVEL], a
-    xor a
-    ld [GAME_SCORE], a
-    ld a, $81
-    ld [rNR21], a
-    ld a, $84
-    ld [rNR22], a
-    ld a, $D7
-    ld [rNR23], a
-    ld a, $86
-    ld [rNR24], a
+;    ld a, [GAME_LEVEL]
+;    ld b, a
+;    ld a, [GAME_SCORE]
+;    cp b
+;    jr z, .incrementLevel
+;    jp .display
+;.incrementLevel
+;    ld a, [GAME_LEVEL]
+;    jp .cont
+;.cont
+;    ld a, [GAME_LEVEL]
+;    add a, $01
+;    daa ; converts contents of a register into BCD
+ ;   ld [GAME_LEVEL], a
+ ;   xor a
+ ;   ld [GAME_SCORE], a
+ ;   ld a, $81
+ ;   ld [rNR21], a
+ ;   ld a, $84
+ ;   ld [rNR22], a
+ ;   ld a, $D7
+ ;   ld [rNR23], a
+ ;   ld a, $86
+ ;   ld [rNR24], a
 .display
     ld a, [GAME_SCORE]
     and $0f
-    ld [$9a27], a
+    ld [$9a29], a
     ld a, [GAME_SCORE]
+    and $f0
+    swap a
+    ld [$9a28], a
+
+    ld a, [GAME_LEVEL]
+    and $0f
+    ld [$9a27], a
+    ld a, [GAME_LEVEL]
     and $f0
     swap a
     ld [$9a26], a
 
-    ld a, [GAME_LEVEL]
-    and $0f
-    ld [$9a31], a
-    ld a, [GAME_LEVEL]
+    ld a, [GAME_LAST_INCREMENT]
+    and $0F
+    ld [$9a32], a
+    ld a, [GAME_LAST_INCREMENT]
     and $f0
     swap a
-    ld [$9a30], a
+    ld [$9a31], a
     ret
 
 SECTION "Global Values", WRAM0[$C000]
@@ -316,10 +319,12 @@ GAME_PAUSED : DS 1
 GAME_OVER : DS 1
 GAME_SCORE : DS 1
 GAME_LEVEL : DS 1
+GAME_LAST_INCREMENT: DS 1
 NEXT_BEAN : DS 1
 ACTIVE_BEANS : DS 1
 FRAME : DS 1
 RandomPtr : DS 1
+FLOOR_TILES : DS 9
 
 SECTION "Font", ROM0
 

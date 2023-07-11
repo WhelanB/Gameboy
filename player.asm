@@ -10,8 +10,10 @@ init_player:
     ld [PLAYER_DY], a
     ld [PLAYER_DX], a
     ld [PLAYER_STEP_COUNT], a
+
     ld a, $01
     ld [PLAYER_FACING], a
+    ld [PLAYER_IS_GROUNDED], a
 
     ; config player pos and sprite
     ld a, $88
@@ -33,6 +35,14 @@ init_player:
 
 
 update_player:
+    ld a, [PLAYER_STEP_COUNT]
+    cp $13
+    jr nz, .dontResetStepCount
+    xor a
+    ld [PLAYER_STEP_COUNT], a
+.dontResetStepCount
+    inc a
+    ld [PLAYER_STEP_COUNT], a
     ; 16X16 EXPERIMENT
     ld a, [PLAYER_FACING] ; Load the direction the player is facing
     cp $00 ; if they are facing right, continue
@@ -113,15 +123,6 @@ update_player:
 
     ; If the grounded flag is set:
 .grounded
-    ld a, [PLAYER_STEP_COUNT]
-    cp $08
-    jr nz, .dontResetStepCount
-    xor a
-    ld [PLAYER_STEP_COUNT], a
-.dontResetStepCount
-    inc a
-    ld [PLAYER_STEP_COUNT], a
-
     ld a, c ; Restore key state
     bit PADB_A, a ; Check for button A down
     jr z, .jumpEnd ; If A not pressed, skip
@@ -224,7 +225,6 @@ update_player:
 
 .resolveYPenetrationDown
     ld a, [PLAYER_X] ; Load Player X pos into H
-    add a, $02 ; Offset it  by 2
     ld h, a
     ld a, [PLAYER_Y] ; Load Player Y pos into L - HL now contains position
     add a, $08 ; bottom of player
@@ -308,7 +308,10 @@ canCollide
     cp $65 ; floor tile
     jr z, .can
 
-    cp $64 ; brick tile
+    cp $64 ; left wall
+    jr z, .can
+
+    cp $66 ; right wall
     jr z, .can
 
     jr .cant

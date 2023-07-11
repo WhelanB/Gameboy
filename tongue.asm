@@ -7,6 +7,8 @@ init_tongue:
     ld [TONGUE_FIRED], a
     ld [TONGUE_ATTRIBUTE], a
     ld [TONGUE_EATING], a
+    ld [TONGUE_COLL_X], a
+    ld [TONGUE_COLL_Y], a
     ld a, $6E
     ld [TONGUE_SPRITE], a ; Set tongue sprite
     ld a, $25 ; 3f
@@ -26,17 +28,19 @@ jumpToPlayerPosOffset:
     jr z, .handleLeftXPos
 .handleRightXPos
     ld a, [PLAYER_X]
-    add a, $03
     ld [TONGUE_X], a
+    sub $06
+    ld [TONGUE_COLL_X], a
     jr .handleYPos
 .handleLeftXPos
     ld a, [PLAYER_X]
-    sub a, $03
     ld [TONGUE_X], a
 .handleYPos
     ld a, [PLAYER_Y]
-    sub a, $05
+    sub a, $02 ; Offset for frog sprite mouth
     ld [TONGUE_Y], a
+    sub $06
+    ld [TONGUE_COLL_Y], a
     ret
     
 updateTongueNodes:
@@ -99,6 +103,9 @@ update_tongue:
     cp $00 ; if it is zero, player is facing left
     jr z, .tongueLeft
 .tongueRight
+    ld a, [TONGUE_X]
+    add $05
+    ld [TONGUE_COLL_X], a
     ld a, [TONGUE_X]; if it is anything else, move the sprite right
     add a, $01
     cp $98 ; Check if the new position is outside the bounds of the rightmost wall
@@ -110,6 +117,9 @@ update_tongue:
     jp .tongueUp
 .tongueLeft
     ld a, [TONGUE_X]
+    add $05
+    ld [TONGUE_COLL_X], a
+    ld a, [TONGUE_X]
     sub a, $01
     cp $10 ; Check if the new position is outside the bounds of the leftmost wall
     jr c, .tongueReachedEnd ; If it is, retract the tongue
@@ -119,6 +129,9 @@ update_tongue:
     ld [TONGUE_ATTRIBUTE], a
 
 .tongueUp
+    ld a, [TONGUE_Y]
+    add $08
+    ld [TONGUE_COLL_Y], a
     ld a, [TONGUE_Y]
     sub a, $01
     cp $18 ; Check if the new position is out of bounds above the topmost wall
@@ -157,6 +170,8 @@ update_tongue:
     xor a
     ld [TONGUE_X], a
     ld [TONGUE_Y], a
+    ld [TONGUE_COLL_X], a
+    ld [TONGUE_COLL_Y], a
     call clearTongueNodes
 
 
@@ -173,9 +188,11 @@ TONGUE_ATTRIBUTE : DS 1
 SECTION "Echo OAM Tongue Nodes", WRAM0[$C10C]
 NODES: DS 48 ; 64 bytes of memory, for OAM data of 16 nodes
 
-SECTION "Tongue Values", WRAM0[$C00A]
+SECTION "Tongue Values", WRAM0[$C0A0]
 TONGUE_Y : DS 1
 TONGUE_X : DS 1
+TONGUE_COLL_X : DS 1
+TONGUE_COLL_Y : DS 1
 TONGUE_IS_ACTIVE : DS 1 ; Is the tongue currently in use?
 TONGUE_LENGTH : DS 1 ; How long is the tongue currently?
 TONGUE_FIRED : DS 1 ; Has the tongue been fired this key press?

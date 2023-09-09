@@ -1,7 +1,9 @@
-; TODO GAME FLOW
+; TODO GAME FLOW:
 ; MAIN PRESS START MENU -> TEXT TUTORIAL -> GAMEPLAY
 ; NEED TO FIGURE OUT RULES AND SPEED OF BEANS - every 100 until 3. then one additional after each 1000 that starts as a block restore?
+; SETTLE ON AISLE ALIGNMENT
 ; BEAN HITTING HEAD COLLISION ZONE
+; BEAN TONGUE COLLISION IMPROVEMENTS
 ; HIGH SCORE FUNCTIONALITY?
 
 
@@ -22,8 +24,8 @@ REPT $150 - $104
 ENDR
 
 SECTION "Game", ROM0
-INCLUDE "Sprites/map.inc"
 INCLUDE "Sprites/beanrandomtable.inc"
+INCLUDE "Sprites/map.inc"
 INCLUDE "Sprites/startscreen.inc"
 INCLUDE "Sprites/mainmenu.inc"
 INCLUDE "Sprites/controls.inc"
@@ -89,6 +91,7 @@ LD SP,$E000
 
 
 .startGame
+    call fadeOut
     call ResetBGScroll
     call TurnOffLCD
 
@@ -133,6 +136,8 @@ LD SP,$E000
     xor a
     ld [FRAME], a
 
+    call fadeIn
+
 ; MAIN GAME LOOP
 .stop:
     ld a, [GAME_OVER]
@@ -140,10 +145,11 @@ LD SP,$E000
     jr z, .gameOver
     halt
     nop ; Halt and nop until v-blank interrupt
-    ; Potentially move bean tilemap updating code into v-blank interrupt
+
     ld a, [GAME_LEVEL]
-    inc a
+    inc a ; really should decouple the game_level -> active_beans logic a bit
     ld [ACTIVE_BEANS], a
+
     call update_beans
     call update_player
     call update_tongue
@@ -325,6 +331,7 @@ ACTIVE_BEANS : DS 1
 FRAME : DS 1
 RandomPtr : DS 1
 FLOOR_TILES : DS 9
+NEXT_BEAN_AISLE: DS 1 ; the aisle that the next fly will spawn in
 
 SECTION "Font", ROM0
 

@@ -1,6 +1,6 @@
 SECTION "Tongue", ROM0
 
-
+TONGUE_SPEED equ $02 ; How many pixels the tongue should step horizontally and vertically each update
 init_tongue:
     xor a ; Zero out the next 4 values in memory
     ld [TONGUE_LENGTH], a
@@ -29,7 +29,6 @@ jumpToPlayerPosOffset:
 .handleRightXPos
     ld a, [PLAYER_X]
     ld [TONGUE_X], a
-    sub $06
     ld [TONGUE_COLL_X], a
     jr .handleYPos
 .handleLeftXPos
@@ -104,10 +103,9 @@ update_tongue:
     jr z, .tongueLeft
 .tongueRight
     ld a, [TONGUE_X]
-    add $05
     ld [TONGUE_COLL_X], a
     ld a, [TONGUE_X]; if it is anything else, move the sprite right
-    add a, $01
+    add a, TONGUE_SPEED
     cp $98 ; Check if the new position is outside the bounds of the rightmost wall
     jr nc, .tongueReachedEnd ; If it is, retract the tongue
     ld [TONGUE_X], a
@@ -117,10 +115,9 @@ update_tongue:
     jp .tongueUp
 .tongueLeft
     ld a, [TONGUE_X]
-    add $05
     ld [TONGUE_COLL_X], a
     ld a, [TONGUE_X]
-    sub a, $01
+    sub a, TONGUE_SPEED
     cp $10 ; Check if the new position is outside the bounds of the leftmost wall
     jr c, .tongueReachedEnd ; If it is, retract the tongue
     ld [TONGUE_X], a
@@ -130,15 +127,15 @@ update_tongue:
 
 .tongueUp
     ld a, [TONGUE_Y]
-    add $08
+    add $06
     ld [TONGUE_COLL_Y], a
     ld a, [TONGUE_Y]
-    sub a, $01
+    sub a, TONGUE_SPEED
     cp $18 ; Check if the new position is out of bounds above the topmost wall
     jr c, .tongueReachedEnd ; If it is, retract the tongue
     ld [TONGUE_Y], a
     ld a, [TONGUE_LENGTH]
-    add a, $01
+    add a, TONGUE_SPEED
     ld [TONGUE_LENGTH], a
     ld a, [TONGUE_LENGTH]
     call updateTongueNodes

@@ -422,13 +422,13 @@ checkOverlapLarge:
     xor a
     ret
 
-; Check if a point is contained within the bounds of an 8x16 sprite
+; Check if a point is contained within the bounds of a 16x16 sprite
 ; @param bc - X1Y1 position of the first sprite
 ; @param hl - X2Y2 position to check
 ; @return a - zero if not contained, one if contained
 checkPointInSpriteLarge:
     ld a, b ; Load X1
-    add a, $08 ; Add the width
+    add a, $10 ; Add the width
     cp h ; Compare against X2
     jr c, .retNoColl
 
@@ -454,3 +454,35 @@ checkPointInSpriteLarge:
 .retNoColl
     xor a
     ret
+
+; Check if an 8x8 box is contained within the bounds of a 16x16 sprite
+; @param bc - X1Y1 position of the first sprite
+; @param hl - X2Y2 position of small box
+; @return a - zero if not contained, one if contained
+checkSmallBoxOverlapsMeta:
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    ld a, h
+    add a, $08
+    ld h, a
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    ld a, l
+    sub $08
+    ld l, a
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    ld a, h
+    sub a, $08
+    ld h, a
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    xor a
+    ret
+.retColl
+    ret
+    

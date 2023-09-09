@@ -1,5 +1,6 @@
 SECTION "Beans", ROM0
 BEAN_POOL_SIZE EQU $0A ; The number of beans to initialise into the pool
+MAX_BEAN_AISLES EQU $12
 
 ; init_beans
 ; This iterates over the area of WRAM allocated for beans
@@ -22,6 +23,7 @@ init_beans:
 
     xor a
     ld [FRAME], a ; zero out the frame counter, a temporary way of controlling bean speed
+    ld [NEXT_BEAN_AISLE], a ; zero out the next bean aisle
 
 .repeat ; Initialise the falling beans in VRAM
     ld d, a ; cache the loop index in d so we can perform arithmetic on a
@@ -29,10 +31,12 @@ init_beans:
     ldi [hl], a ; zero out the y-pos and increment
     ld a, d ; restore the index into a
     call GetNextBeanAisle
+    ld a, b
     sla a
     sla a
     sla a
     add a, $10; add $10, since x pos is -8 and there are walls at the side of the map
+    ld a, c
 ; 16X16 BEANS TEST
     ld e, a ; put the position into e, so we can set it on the second sprite later
 ; end
@@ -65,32 +69,39 @@ init_beans:
 ; Read a random number from the BeanRandomTable and return it (next aisle for the bean to fall in)
 GetNextBeanAisle:
         push    hl
-        ld      a, [RandomPtr]
-        inc     a
-        ld      [RandomPtr], a
-        ld      hl, BeanRandomTable
-        add     a, l
-        ld      l, a
-        jr      nc, .skip
-        inc     h
-.skip:  ld      a, [hl]
-;16X16 BEANS TEST
-; always odd
-        cp $01
-        jr nz, .cont
-        add $02
-.cont
-        rr a
-        jp Nc, .stop
-        rl a
-        sub $01
-        
-.stop
+        xor a
+        ld b, a
+        ld a, [NEXT_BEAN_AISLE]
+        ld c, a ; BC is now $00[NEXT_BEAN_AISLE]
+        ld hl, BeanRandomTable ; HL is the start address of the aisle table
+        add hl, bc ; HL is now start address + NEXT_BEAN_AISLE
+        ld a, [hl] ; a is now the aisle at that address
+        ld e, a ; e is now the aisle at that address
+        ld a, BeanRandomTableY - BeanRandomTable ; a is now the offset needed to index into the Y index table
+        ld c, a ; c is now the offset needed to index into the Y index table
+        add hl, bc ; HL is now the start address + NEXT_BEAN_AISLE + Y index table offset
+        ld a, [hl] ; a is now the Y-index of the aisle
+        ld c, a ; c is now the Y-index of the aisle
+        ld a, e ; a is now the X-index of the aisle
+        ld b, a ; BC is now the X-Y indexes of the aisle
+        ld a, [NEXT_BEAN_AISLE]
+        inc a
+        ld [NEXT_BEAN_AISLE], a
         pop     hl
         ret
 
 
 update_beans:
+    ld a, [NEXT_BEAN_AISLE] ; Load the current bean aisle into a
+    inc a ; add one
+    cp MAX_BEAN_AISLES ; check if it's greater than or equal to the max number
+    jr c, .dontResetBeanAisleCounter
+    jr z, .dontResetBeanAisleCounter
+    sub a, MAX_BEAN_AISLES ; instead of setting it to zero, subtract the max number, so that if we add small methods of randomness here it won't always resort to 0
+    ld [NEXT_BEAN_AISLE], a
+
+.dontResetBeanAisleCounter
+    ld [NEXT_BEAN_AISLE], a
     xor a ; zero out a
     ld hl, $C14C ; Load the echo OAM address into hl, so we can index sprites from here on out
     ld a, [FRAME]
@@ -113,7 +124,6 @@ update_beans:
     ; CHECK OVERLAP WITH TONGUE
     push hl ; save hl, since it is used as a memory address
     ld a, [hl] ; load the current bean y-pos
-    add a, $08
     ld c, a ; into c
     inc hl ; inc hl to get x-pos
     ld a, [hl] ; load the current bean x-pos
@@ -122,14 +132,15 @@ update_beans:
     ld h, a ; into h
     ld a, [TONGUE_COLL_Y] ; load the tongue tip y-pos
     ld l, a ; into l
-    call checkPointInSpriteLarge ; check if bc overlaps with hl (if the tongue overlaps with the current bean)
+    call checkSmallBoxOverlapsMeta
     ld [TONGUE_EATING], a ; if it is, set the tongue to eating so it knows to retract
     pop hl ; restore hl
     cp $00 ; if the result of checkOverlap was 0
     jr z, .skipcoltest ; skip the next section
 
 ; We've hit a bean, so reset it back to the top of the screen
-    xor a
+    call GetNextBeanAisle
+    ld a, c
     ld [hl], a ; load zero into location at hl (resets the y-pos of the current bean)
 
     inc hl
@@ -142,8 +153,8 @@ update_beans:
     dec hl
     dec hl
 
+    ld a, b
     inc hl ; REMOVE ME
-    call GetNextBeanAisle
     sla a
     sla a
     sla a
@@ -166,9 +177,9 @@ update_beans:
     sra a
     sra a
     ld b, a ; Add tongue length to score - the further the tongue reaches, the higher points awarded
-    add a, $0
+    add a, $0 ; nop for daa
     daa
-    ld [GAME_LAST_INCREMENT], a
+    ld [GAME_LAST_INCREMENT], a ; store the tongue length as last score increment
     ld a, [GAME_SCORE] ; load the current score into a
     add a, b
     daa ; convert to binary-coded decimal
@@ -207,7 +218,8 @@ update_beans:
     cp $01
     jr z, .isGrounded ; if the player is grounded, game over man, game over!
 
-    xor a
+    call GetNextBeanAisle
+    ld a, c
     ld [hl], a ; load zero into location at hl (resets the y-pos of the current bean)
 
     inc hl
@@ -221,7 +233,7 @@ update_beans:
     dec hl
 
     inc hl ; REMOVE ME
-    call GetNextBeanAisle
+    ld a, b
     sla a
     sla a
     sla a
@@ -287,24 +299,11 @@ update_beans:
     dec hl
     dec hl
 
-    cp $88 ; $87 is the floor pos
+    cp $88 ; $88 is the floor pos
     jr nz, .dontDestroy ; if we are not at the floor pos, skip to dontDestroy
     ;ld a, [NEXT_BEAN] ;; TODO what are these lines doing?
     ;sla a
     ;ld c, a
-    ld a, $90
-    ;sub a, c
-    ld [hl], a ; set the y-pos back to 0
-
-    inc hl
-    inc hl
-    inc hl
-    inc hl
-    ld [hl], a ; Restore the Y-Pos
-    dec hl
-    dec hl
-    dec hl
-    dec hl
 
     push hl ; push hl on to the stack
     inc hl
@@ -319,8 +318,24 @@ update_beans:
     ld [rNR44], a ; Play noise
 .dontReplace
     pop hl
-    inc hl
+
     call GetNextBeanAisle
+    ld a, c
+    ;sub a, c
+    ld [hl], a ; set the y-pos to aisle
+
+    inc hl
+    inc hl
+    inc hl
+    inc hl
+    ld [hl], a ; Restore the Y-Pos
+    dec hl
+    dec hl
+    dec hl
+    dec hl
+
+    inc hl ; REMOVE ME
+    ld a, b
     sla a
     sla a
     sla a
@@ -336,6 +351,7 @@ update_beans:
     dec hl
     dec hl
     dec hl
+
 
     dec hl
 .dontDestroy
@@ -380,7 +396,6 @@ update_beans:
 .stop
     ret
 
-SECTION "Beans WRAM", WRAM0[$C300] ; Bean scratchpad
 SECTION "Echo OAM BEANS", WRAM0[$C14C] ; Bean instances
 BEAN_Y: DS 1 ; First bean instance Y-pos (useful for indexing)
 BEAN_X: DS 1 ; First bean instance X-pos (useful for indexing)

@@ -2,7 +2,7 @@ SECTION "Player", ROM0
 ; These three values should be multiples
 PLAYER_GRAVITY equ %00000110 ; 0.1875 (000.00110)
 GRAVITY_LIM equ $84 ; (100.00100)
-PLAYER_JUMP_VEL equ %01100000 ; 3.0 (011.00000)
+PLAYER_JUMP_VEL equ %01000010 ; 3.0 (011.00000)
 FLOOR_POS equ $88
 WALK_SPEED equ $01
 init_player:

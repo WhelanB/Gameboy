@@ -125,8 +125,21 @@ ScrollBGUpLim:
 .return
     ret
 
+; Reset the background scroll back to 0, 0
+ResetBGScroll:
+    xor a
+    ld [rSCX], a
+    ld [rSCY], a
+    ret
 
-StepFadeOutCurrentPallete:
+StepFadeOutDefaultPallete:
+    cp $10
+    jr z, .black
+    cp $06
+    jr z, .darkgrey
+    cp $02
+    jr z, .lightgrey
+    jr .ret
 .black
     ld a, [rBGP]
     cp $E4
@@ -155,7 +168,14 @@ StepFadeOutCurrentPallete:
 .ret
     ret
 
-StepFadeInCurrentPallete:
+StepFadeInDefaultPallete:
+    cp $10
+    jr z, .black
+    cp $06
+    jr z, .darkgrey
+    cp $02
+    jr z, .lightgrey
+    jr .ret
 .black
     ld a, [rBGP]
     cp $00
@@ -181,41 +201,6 @@ StepFadeInCurrentPallete:
     ld [rOBP0], a
     jr .ret
 .white
-.ret
-    ret
-
-StepFadeOut:
-    cp $10
-    jr nz, .next
-    ld a, %11100100 ; Set palette
-    ld [rBGP], a
-    ld a, %11100100
-    ld [rOBP0], a
-    jr .ret
-.next
-    cp $08
-    jr nz, .next2
-    ld a, %11110110 ; Set palette
-    ld [rBGP], a
-    ld a, %11100100
-    ld [rOBP0], a
-    jr .ret
-.next2
-    cp $04
-    jr nz, .next3
-    ld a, %11111110 ; Set palette
-    ld [rBGP], a
-    ld a, %11111110
-    ld [rOBP0], a
-    jr .ret
-.next3
-    cp $01
-    jr nz, .ret
-    ld a, %11111111 ; Set palette
-    ld [rBGP], a
-    ld a, %11111111
-    ld [rOBP0], a
-    jr .ret
 .ret
     ret
 
@@ -358,7 +343,7 @@ stringCopy:
     ld [hli], a
     jr stringCopy
 
-; Check if one sprite position intersects with another
+; Check if one sprite position intersects with another (8x8)
 ; @param bc - X1Y1 position of the first sprite
 ; @param hl - X2Y2 position of the second sprite
 ; @return a - zero if no overlap, one if overlap
@@ -375,16 +360,16 @@ checkOverlap:
     cp h ; Compare against X1
     jr nc, .lte 
 
-    ld a, c ; Load X1
-    add a, $08 ; Add the width
-    cp l ; Compare against X2
+    ld a, c ; Load Y1
+    add a, $08 ; Add the height
+    cp l ; Compare against Y2
     jr c, .retNoColl
 
-    ld a, l ; Load X2
-    add a, $08 ; Add the width
+    ld a, l ; Load Y2
+    add a, $08 ; Add the height
     ld l, a
     ld a, c
-    cp l ; Compare against X1
+    cp l ; Compare against Y1
     jr nc, .lte 
 
 .retColl
@@ -396,3 +381,108 @@ checkOverlap:
 .retNoColl
     xor a
     ret
+
+
+; Check if one sprite position intersects with another (8x16)
+; @param bc - X1Y1 position of the first sprite
+; @param hl - X2Y2 position of the second sprite
+; @return a - zero if no overlap, one if overlap
+checkOverlapLarge:
+    ld a, b ; Load X1
+    add a, $08 ; Add the width
+    cp h ; Compare against X2
+    jr c, .retNoColl
+
+    ld a, h ; Load X2
+    add a, $08 ; Add the width
+    ld h, a
+    ld a, b
+    cp h ; Compare against X1
+    jr nc, .lte 
+
+    ld a, c ; Load Y1
+    add a, $10 ; Add the height
+    cp l ; Compare against Y2
+    jr c, .retNoColl
+
+    ld a, l ; Load Y2
+    add a, $10 ; Add the height
+    ld l, a
+    ld a, c
+    cp l ; Compare against Y1
+    jr nc, .lte 
+
+.retColl
+    ld a, $01
+    ret
+.lte
+    jr nz, .retNoColl
+    jp .retNoColl
+.retNoColl
+    xor a
+    ret
+
+; Check if a point is contained within the bounds of a 16x16 sprite
+; @param bc - X1Y1 position of the first sprite
+; @param hl - X2Y2 position to check
+; @return a - zero if not contained, one if contained
+checkPointInSpriteLarge:
+    ld a, b ; Load X1
+    add a, $10 ; Add the width
+    cp h ; Compare against X2
+    jr c, .retNoColl
+
+    ld a, b
+    cp h ; Compare against X1
+    jr nc, .lte 
+
+    ld a, c ; Load Y1
+    add a, $10 ; Add the height
+    cp l ; Compare against Y2
+    jr c, .retNoColl
+
+    ld a, c
+    cp l ; Compare against Y1
+    jr nc, .lte 
+
+.retColl
+    ld a, $01
+    ret
+.lte
+    jr nz, .retNoColl
+    jp .retNoColl
+.retNoColl
+    xor a
+    ret
+
+; Check if an 8x8 box is contained within the bounds of a 16x16 sprite
+; @param bc - X1Y1 position of the first sprite
+; @param hl - X2Y2 position of small box
+; @return a - zero if not contained, one if contained
+checkSmallBoxOverlapsMeta:
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    ld a, h
+    add a, $08
+    ld h, a
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    ld a, l
+    sub $08
+    ld l, a
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    ld a, h
+    sub a, $08
+    ld h, a
+    call checkPointInSpriteLarge
+    cp $01
+    jr .retColl
+    xor a
+    ret
+.retColl
+    ret
+    

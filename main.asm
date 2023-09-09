@@ -1,8 +1,18 @@
+; TODO GAME FLOW:
+; MAIN PRESS START MENU -> TEXT TUTORIAL -> GAMEPLAY
+; NEED TO FIGURE OUT RULES AND SPEED OF BEANS - every 100 until 3. then one additional after each 1000 that starts as a block restore?
+; SETTLE ON AISLE ALIGNMENT
+; BEAN HITTING HEAD COLLISION ZONE
+; BEAN TONGUE COLLISION IMPROVEMENTS
+; HIGH SCORE FUNCTIONALITY?
+
+
 INCLUDE "hardware.inc"
 INCLUDE "helpers.asm"
 INCLUDE "player.asm"
 INCLUDE "tongue.asm"
 INCLUDE "beans.asm"
+INCLUDE "floor.asm"
 
 SECTION "Header", ROM0[$100]
 
@@ -14,50 +24,75 @@ REPT $150 - $104
 ENDR
 
 SECTION "Game", ROM0
-INCLUDE "Sprites/menu.inc"
-INCLUDE "Sprites/win.inc"
-INCLUDE "Sprites/map.inc"
 INCLUDE "Sprites/beanrandomtable.inc"
+INCLUDE "Sprites/map.inc"
+INCLUDE "Sprites/startscreen.inc"
 INCLUDE "Sprites/mainmenu.inc"
+INCLUDE "Sprites/controls.inc"
+
 Start:
-;    ld a, IEF_HILO
-;    ld [rIE], a
-;    ei
-;    call TurnOffLCD
-;
-;    ld hl, $C100 ; clear OAM
-;    ld bc, $FE9F - _OAMRAM
-;    call memClear
-;
-;    ld hl, $8000 ; go to zero in first VRAM tileset
-;    ld de, mainmenu_tile_data ; Load tile data location
-;    ld bc, mainmenu_tile_data_size ; Load tile data size
-;    call memCopy ; Copy tile data to VRAM
 
-;    ld hl, $9000 ; go to zero in first VRAM tileset
-;    ld de, mainmenu_tile_data ; Load tile data location
-;    ld bc, mainmenu_tile_data_size ; Load tile data size
-;    call memCopy ; Copy tile data to VRAM
 
-;    ld hl, $9800 ; Load background location
-;    ld de, mainmenu_map_data ; Load tilemap location
-;    ld bc, mainmenu_tile_map_size ; Load tilemap size
-;    call memCopy ; Copy tilemap to background buffer
-
- ;   ld a, %10000011 ;
- ;   ld [rLCDC], a ; Enable LCD, Sprites and Background
- ;   halt
- ;   nop
 
     ld	a, IEF_VBLANK | IEF_LCDC ; Enable v-blank interrupt only
     ld	[rIE], a 
     call CopyDMARoutine
     ei
 
-    ;call WaitVBlank
-    halt ; Halt stops CPU until interrupt (v-blank) occurs
-    nop ; nop, because of Halt bug
+LD SP,$E000
 
+
+
+.startScreen
+
+    call TurnOffLCD ; turn off the LCD and load the game over screen
+    ld hl, $C100 ; clear OAM
+    ld bc, $FE9F - _OAMRAM
+    call memClear ; Copy tile data to VRAM
+
+    ld hl, $8000 ; go to zero in first VRAM tileset
+    ld de, startscreen_tile_data ; Load tile data location
+    ld bc, startscreen_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9000 ; go to zero in first VRAM tileset
+    ld de, startscreen_tile_data ; Load tile data location
+    ld bc, startscreen_tile_data_size ; Load tile data size
+    call memCopy ; Copy tile data to VRAM
+
+    ld hl, $9800 ; Load background location
+    ld de, startscreen_map_data ; Load tilemap location
+    ld bc, startscreen_tile_map_size ; Load tilemap size
+    call memCopy ; Copy tilemap to background buffer
+
+    ld a, %11100100 ; Set palette
+    ld [rBGP], a
+    ld a, %11100100
+    ld [rOBP0], a
+    ld a, %10000011 ;
+    ld [rLCDC], a ; Enable LCD, Sprites and Background
+.loopj
+    halt
+    nop
+    call SampleInput
+    cp $00
+    jr z, .loopj
+
+; scroll the main menu up and down to give controls etc
+    bit PADB_DOWN, a
+    jr z, .testUp
+    call ScrollBGUpLim
+    jr .loopj
+.testUp
+    bit PADB_UP, a
+    jr z, .startGame
+    call ScrollBGDownLim
+    jr .loopj
+
+
+.startGame
+    call fadeOut
+    call ResetBGScroll
     call TurnOffLCD
 
     ld hl, $C100 ; clear OAM
@@ -79,24 +114,11 @@ Start:
     ld bc, map_tile_map_size ; Load tilemap size
     call memCopy ; Copy tilemap to background buffer
 
-    ld a, %11100100 ; Set palette
-    ld [rBGP], a
-    ld a, %11100100
-    ld [rOBP0], a
-
     xor a
     ld [GAME_SCORE], a ; Set score to 0
-    ld a, $01
     ld [GAME_LEVEL], a ; Set first level to 1
+    ld [GAME_LAST_INCREMENT], a
 
-    ld a, $88
-    ld [$C100], a
-    ld a, $22
-    ld [$C101], a
-    ld a, $6A
-    ld [$C102], a
-    xor a
-    ld [$C103], a
 
 ;    ld [rNR52], a ; Disable sound
     ld a, %01110111
@@ -108,21 +130,30 @@ Start:
     call init_player
     call init_tongue
     call init_beans
+    call init_floor
     ld a, $02
     ld [NEXT_BEAN], a
     xor a
     ld [FRAME], a
 
+    call fadeIn
+
+; MAIN GAME LOOP
 .stop:
     ld a, [GAME_OVER]
     cp $01
     jr z, .gameOver
     halt
-    nop
-    ; Potentially move bean tilemap updating code into v-blank interrupt
+    nop ; Halt and nop until v-blank interrupt
+
+    ld a, [GAME_LEVEL]
+    inc a ; really should decouple the game_level -> active_beans logic a bit
+    ld [ACTIVE_BEANS], a
+
     call update_beans
     call update_player
     call update_tongue
+    call update_floor
     call renderScore
     ld a, [FRAME]
     SRL a ; 
@@ -140,31 +171,22 @@ Start:
 .dontreset
 jr .stop
 
+
+
+; GAME OVER PROCESS
 .gameOver
-    ld a, IEF_VBLANK | IEF_LCDC
-    ld [rIE], a
-    ei
-    ld a, $FF
-    ld b, a
-.fadeout
-    ld a, b
-    call StepFadeOutCurrentPallete
+
+; FADE OUT THE SCREEN TO WHITE
+    call fadeOut
+
     halt
     nop
-    ld a, b
-    dec a
-    ld b, a
-    cp $00
-    jr nz, .fadeout
-.doneFadeOut
-    di
-    ld a, IEF_HILO
-    ld [rIE], a
-    ei
     xor a
-    ld [GAME_OVER], a
-    call TurnOffLCD
-    ld hl, $FE00 ; clear OAM
+    ld [GAME_OVER], a ; reset game over flag
+
+
+    call TurnOffLCD ; turn off the LCD and load the game over screen
+    ld hl, $C100 ; clear OAM
     ld bc, $FE9F - _OAMRAM
     call memClear ; Copy tile data to VRAM
 
@@ -185,84 +207,117 @@ jr .stop
 
     ld a, %10000011 ;
     ld [rLCDC], a ; Enable LCD, Sprites and Background
-    ld a, $FF
+
+    call fadeIn ; fade back in
+    call renderScore
+.loopi
+    halt
+    nop
+    call SampleInput
+    cp $00
+    jr z, .loopi
+    jp Start
+
+
+wait:
+    ld a, %00000110
+    ld [rTAC], a
+    ld a, $00
+    ld [rTMA], a
+    di
+    ld	a, IEF_TIMER
+    ld	[rIE], a
+    ei
+    halt
+    nop
+    di
+    ld	a, IEF_VBLANK | IEF_LCDC
+    ld	[rIE], a
+    ei
+    ret
+
+
+fadeIn:
+    ld a, $10
     ld b, a
 .fadein
     ld a, b
-    call StepFadeInCurrentPallete
+    call StepFadeInDefaultPallete
     halt
     nop
     ld a, b
     dec a
     ld b, a
-    cp $00
+    cp $01
     jr nz, .fadein
 .doneFadeIn
+    ret
+
+fadeOut:
+    ld a, $10
+    ld b, a
+.fadeout
+    ld a, b
+    call StepFadeOutDefaultPallete
     halt
     nop
-    jp .stop
+    ld a, b
+    dec a
+    ld b, a
+    cp $01
+    jr nz, .fadeout
+.doneFadeOut
+    ret
 
 renderScore:
-    ld a, [GAME_LEVEL]
-    ld b, a
-    ld a, [GAME_SCORE]
-    cp b
-    jr z, .incrementLevel
-    jp .display
-.incrementLevel
-    ld a, [GAME_LEVEL]
-    jp .cont
-    cp $10
-    jr nz, .cont
-    call TurnOffLCD
-
-    ld hl, $C100 ; clear OAM
-    ld bc, $FE9F - _OAMRAM
-    call memClear ; Clear
-
-    ld hl, $9000 ; go to zero in first VRAM tileset
-    ld de, win_tile_data ; Load tile data location
-    ld bc, win_tile_data_size ; Load tile data size
-    call memCopy ; Copy tile data to VRAM
-
-    ld hl, $9800 ; Load background location
-    ld de, win_map_data ; Load tilemap location
-    ld bc, win_tile_map_size ; Load tilemap size
-    call memCopy ; Copy tilemap to background buffer
-
-    ld a, %10000011 ;
-    ld [rLCDC], a ; Enable LCD, Sprites and Background
-.cont
-    ld a, [GAME_LEVEL]
-    add a, $01
-    daa ; converts contents of a register into BCD
-    ld [GAME_LEVEL], a
-    xor a
-    ld [GAME_SCORE], a
-    ld a, $81
-    ld [rNR21], a
-    ld a, $84
-    ld [rNR22], a
-    ld a, $D7
-    ld [rNR23], a
-    ld a, $86
-    ld [rNR24], a
+;    ld a, [GAME_LEVEL]
+;    ld b, a
+;    ld a, [GAME_SCORE]
+;    cp b
+;    jr z, .incrementLevel
+;    jp .display
+;.incrementLevel
+;    ld a, [GAME_LEVEL]
+;    jp .cont
+;.cont
+;    ld a, [GAME_LEVEL]
+;    add a, $01
+;    daa ; converts contents of a register into BCD
+ ;   ld [GAME_LEVEL], a
+ ;   xor a
+ ;   ld [GAME_SCORE], a
+ ;   ld a, $81
+ ;   ld [rNR21], a
+ ;   ld a, $84
+ ;   ld [rNR22], a
+ ;   ld a, $D7
+ ;   ld [rNR23], a
+ ;   ld a, $86
+ ;   ld [rNR24], a
 .display
     ld a, [GAME_SCORE]
     and $0f
-    ld [$9a27], a
+    ld [$9a29], a
     ld a, [GAME_SCORE]
+    and $f0
+    swap a
+    ld [$9a28], a
+
+    ld a, [GAME_LEVEL]
+    and $0f
+    ld [$9a27], a
+    ld a, [GAME_LEVEL]
     and $f0
     swap a
     ld [$9a26], a
 
-    ld a, [GAME_LEVEL]
-    and $0f
-    ld [$9a31], a
-    ld a, [GAME_LEVEL]
+    ld a, [GAME_LAST_INCREMENT]
+    and $0F
+    ld [$9a32], a
+    ld a, [GAME_LAST_INCREMENT]
     and $f0
     swap a
-    ld [$9a30], a
+    ld [$9a31], a
     ret
 
 SECTION "Global Values", WRAM0[$C000]
@@ -270,10 +325,13 @@ GAME_PAUSED : DS 1
 GAME_OVER : DS 1
 GAME_SCORE : DS 1
 GAME_LEVEL : DS 1
+GAME_LAST_INCREMENT: DS 1
 NEXT_BEAN : DS 1
 ACTIVE_BEANS : DS 1
 FRAME : DS 1
 RandomPtr : DS 1
+FLOOR_TILES : DS 9
+NEXT_BEAN_AISLE: DS 1 ; the aisle that the next fly will spawn in
 
 SECTION "Font", ROM0
 

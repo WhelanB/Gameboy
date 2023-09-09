@@ -1,24 +1,28 @@
 # Gameboy Game
-## A Pyoro (Birds and Beans) style game for the Gameboy DMG
 
-Written entirely in Assembly, this is a work in progress game for the original Gameboy, based off of the game Pyoro
+Written entirely in Assembly, this is a work in progress game for the original Gameboy DMG
 
-The goal of the game is to consume berries falling from the sky before they collide with the ground, destroying it.
+The goal of the game is to eat flies falling from the sky, before they have a chance to damage the ground beneath your feet
 
 ## Features
 
 Complete:
 
 - Player movement, jumping and collision
-- Extendable tongue to consume berries (beans)
+- Extendable tongue to consume flies
+- Sound effects
 - Breakable floor tiles
-- Score UI
-
-In Progress:
-- Falling berries based on level
-- Berries to restore floor tiles
-- Start screen
+- Difficulty scaling based on score
 - Lose condition
+- Score UI
+- Start screen
+- Animation
+
+TODO:
+- Items to restore ground tiles/delete flies
+- Proper menu screen and title
+- Background music
+- High Score
 
 Sample gif of current gameplay:
 
